@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeCompile: AI-Powered Secure Code Compiler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        /* Custom scrollbar for dark theme textareas */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #2D3748; /* bg-gray-800 */
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #4A5568; /* bg-gray-700 */
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #687080; /* darker gray */
+        }
+
+        /* Styles for line numbers */
+        .line-numbers-container {
+            display: flex;
+            height: 500px; /* Match textarea height */
+            overflow: hidden; /* Hide scrollbar for line numbers */
+            position: relative;
+        }
+        .line-numbers {
+            background-color: #1a202c; /* Darker background for numbers */
+            color: #6B7280; /* Text color for numbers */
+            padding: 24px 10px 24px 10px; /* Match textarea padding-left and top/bottom */
+            text-align: right;
+            user-select: none; /* Prevent selection of line numbers */
+            flex-shrink: 0; /* Don't let it shrink */
+            font-size: 1.125rem; /* Match textarea text-lg */
+            line-height: 1.75rem; /* Match textarea line-height */
+            overflow-y: hidden; /* Hide vertical scrollbar */
+        }
+        .line-numbers span {
+            display: block;
+        }
+        .code-textarea {
+            padding-left: 10px !important; /* Adjust textarea padding to align with numbers */
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-5xl font-extrabold text-blue-400">SafeCompile</h1>
+            <p class="text-xl text-gray-400 mt-1">AI-Powered Secure Code Compiler</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="md:col-span-2">
+                <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+                    <div class="flex p-3 border-b border-gray-700">
+                        <button id="compile-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Compile</button>
+                        <button id="analyze-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Analyze</button>
+                        <button id="clear-button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-md text-lg transition-colors">Clear</button>
+                    </div>
+                    <div class="line-numbers-container bg-gray-900">
+                        <div id="line-numbers" class="line-numbers code-font"></div>
+                        <textarea id="code-input" rows="20" class="code-textarea w-full h-[500px] p-6 bg-gray-900 text-gray-200 text-lg code-font focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="// Write your C code here...">
+#include <stdio.h>
+#include <string.h> // For vulnerable strcpy
+
+int main() {
+    char buffer[10];
+    char input[] = "This is a very long string that will overflow the buffer.";
+
+    printf("Hello from SafeCompile!\\n");
+
+    // Vulnerable code: buffer overflow using strcpy
+    // This should be flagged by analysis
+    strcpy(buffer, input);
+
+    printf("Buffer content: %s\\n", buffer);
+
+    // Another example of potentially insecure code (e.g., using gets)
+    // char user_input[20];
+    // printf("Enter some text: ");
+    // gets(user_input); // Highly insecure
+    // printf("You entered: %s\\n", user_input);
+
+    return 0;
+}
+</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
+                <div id="security-vulnerabilities" class="bg-gray-800 rounded-lg shadow-xl p-6 h-[500px] overflow-y-auto">
+                    <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see vulnerabilities...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Compiled Output</h2>
+                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
+                    <div id="compiler-output" class="whitespace-pre-wrap"></div>
+                    <div id="compiler-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
+                        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Program Output</h2>
+                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
+                    <div id="program-output" class="whitespace-pre-wrap"></div>
+                    <div id="program-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
+                        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-message-section" class="bg-red-800 p-4 rounded-lg shadow-xl mt-6 hidden">
+            <h2 class="text-2xl font-semibold text-red-300 mb-3">Error</h2>
+            <div id="error-message" class="text-red-200 code-font"></div>
+        </div>
+
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

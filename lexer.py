@@ -2,6 +2,7 @@ import re
 
 # Token patterns for C/C++
 token_patterns = [
+    ('COMMENT', r'//[^\n]*|/\*[\s\S]*?\*/'),
     ('PREPROCESSOR', r'#\s*(include|define|ifdef|ifndef|endif|pragma|undef|elif|else)\b.*'),
     ('KEYWORD', r'\b(alignas|alignof|and|and_eq|asm|auto|bitand|bitor|bool|break|case|catch|char|char16_t|char32_t|class|compl|const|constexpr|const_cast|continue|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor|xor_eq)\b'),
     ('IDENTIFIER', r'\b[a-zA-Z_][a-zA-Z0-9_]*\b'),
@@ -10,7 +11,6 @@ token_patterns = [
     ('STRING', r'"(\\.|[^\\"])*"'),
     ('OPERATOR', r'>>=|<<=|\+\+|--|->\*|->|==|!=|>=|<=|&&|\|\||<<|>>|::|\+=|-=|\*=|/=|%=|&=|\|=|\^=|~|!|=|\+|-|\*|/|%|<|>|\^|&|\||\?|\:'),
     ('SEPARATOR', r'[{}\[\]();,\.]'),
-    ('COMMENT', r'//[^\n]*|/\*[\s\S]*?\*/'),
     ('WHITESPACE', r'\s+'),
     ('UNKNOWN', r'.'),
 ]
