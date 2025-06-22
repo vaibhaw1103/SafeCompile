@@ -1,9 +1,11 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark"> <!-- Start with dark theme -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SafeCompile: AI-Powered Secure Code Compiler</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -28,7 +30,6 @@
         textarea::-webkit-scrollbar-thumb:hover {
             background: #687080; /* darker gray */
         }
-
         /* Styles for line numbers */
         .line-numbers-container {
             display: flex;
@@ -55,18 +56,36 @@
             border-top-left-radius: 0;
             border-bottom-left-radius: 0;
         }
+        /* Style for the dynamically created input textarea */
+        .compiler-input-textarea {
+            width: 100%;
+            height: 100%;
+            padding: 4px; /* Adjust padding for input mode */
+            background-color: #1a202c; /* Darker background for input */
+            color: #e2e8f0;
+            font-size: 1rem; /* Slightly smaller font for input */
+            font-family: 'Fira Code', monospace;
+            border: 1px solid #4A5568; /* Add a subtle border */
+            border-radius: 0.375rem; /* match tailwind rounded-md */
+            resize: none; /* Disable manual resize */
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 min-h-screen p-8">
     <div class="max-w-7xl mx-auto">
+        <!-- Header -->
         <header class="mb-8">
             <h1 class="text-5xl font-extrabold text-blue-400">SafeCompile</h1>
             <p class="text-xl text-gray-400 mt-1">AI-Powered Secure Code Compiler</p>
         </header>
 
+        <!-- Main Layout: Input + Vulnerabilities -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Code Input Area -->
             <div class="md:col-span-2">
                 <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+                    <!-- Buttons Bar -->
                     <div class="flex p-3 border-b border-gray-700">
                         <button id="compile-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Compile</button>
                         <button id="analyze-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Analyze</button>
@@ -90,11 +109,11 @@ int main() {
 
     printf("Buffer content: %s\\n", buffer);
 
-    // Another example of potentially insecure code (e.g., using gets)
-    // char user_input[20];
-    // printf("Enter some text: ");
-    // gets(user_input); // Highly insecure
-    // printf("You entered: %s\\n", user_input);
+    // Example with user input:
+    // int num;
+    // printf("Enter a number: ");
+    // scanf("%d", &num); // This will trigger needs_input
+    // printf("You entered: %d\\n", num);
 
     return 0;
 }
@@ -103,19 +122,28 @@ int main() {
                 </div>
             </div>
 
+            <!-- Security Vulnerabilities / Analysis Report -->
             <div>
                 <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
                 <div id="security-vulnerabilities" class="bg-gray-800 rounded-lg shadow-xl p-6 h-[500px] overflow-y-auto">
+                    <!-- Vulnerability cards will be injected here by JS -->
                     <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see vulnerabilities...</p>
                 </div>
             </div>
         </div>
 
+        <!-- Output Areas -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Compiled Output -->
             <div>
                 <h2 class="text-2xl font-semibold text-gray-100 mb-3">Compiled Output</h2>
-                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
-                    <div id="compiler-output" class="whitespace-pre-wrap"></div>
+                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative flex flex-col">
+                    <div id="compiler-output-container" class="flex-grow">
+                        <!-- Content will be injected here (div or textarea) -->
+                        <div id="compiler-output" class="whitespace-pre-wrap flex-grow"></div>
+                    </div>
+                    <!-- Moved run-with-input-button outside compiler-output-container -->
+                    <button id="run-with-input-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md mt-2 hidden transition-colors self-end text-sm">Run Program</button>
                     <div id="compiler-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
                         <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -125,6 +153,7 @@ int main() {
                 </div>
             </div>
 
+            <!-- Program Output -->
             <div>
                 <h2 class="text-2xl font-semibold text-gray-100 mb-3">Program Output</h2>
                 <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
@@ -139,6 +168,7 @@ int main() {
             </div>
         </div>
 
+        <!-- Error Message Area -->
         <div id="error-message-section" class="bg-red-800 p-4 rounded-lg shadow-xl mt-6 hidden">
             <h2 class="text-2xl font-semibold text-red-300 mb-3">Error</h2>
             <div id="error-message" class="text-red-200 code-font"></div>
