@@ -3,7 +3,7 @@
 
 import os
 import uuid
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, send_from_directory # NEW: import send_from_directory
 
 # IMPORTANT: Ensure your analyze.py and main.py files are in the same directory as this app.py
 # We will import the core logic from them.
@@ -19,6 +19,12 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# Create directory for parse tree images if it doesn't exist
+PARSE_TREE_IMAGE_DIR = os.path.join('static', 'parse_trees') # Moved this here as it's an app-wide config
+if not os.path.exists(PARSE_TREE_IMAGE_DIR):
+    os.makedirs(PARSE_TREE_IMAGE_DIR)
+
+
 @app.route('/')
 def index():
     """
@@ -26,43 +32,75 @@ def index():
     """
     return render_template('index.html')
 
+# Route to serve the generated parse tree images
+@app.route('/static/parse_trees/<filename>') # Changed route to reflect static serving
+def serve_parse_tree_image(filename):
+    """
+    Serves the generated parse tree images from the static/parse_trees directory.
+    """
+    return send_from_directory(os.path.join(app.root_path, 'static', 'parse_trees'), filename) # Corrected path
+
+
 @app.route('/analyze_and_compile', methods=['POST'])
 def analyze_and_compile_endpoint():
     """
     API endpoint to receive C code, run analysis, compile, and execute.
     Returns JSON response with all results.
     """
-    # Get the C code string from the incoming JSON request
     code_string = request.json.get('code', '')
 
     if not code_string:
         return jsonify({"error": "No code provided for analysis."}), 400
 
-    # Generate a unique filename for the temporary C file
     temp_filename = os.path.join(app.config['UPLOAD_FOLDER'], f"user_code_{uuid.uuid4()}.c")
     
-    # Initialize results dictionaries
-    analysis_results = {}
+    # Initialize results dictionaries (these will be populated or stay empty on error)
+    analysis_output = {} # This will directly hold the dict from analyze_code
     compilation_execution_results = {}
     
     try:
-        # Save the user's code to a temporary file
         with open(temp_filename, 'w') as f:
             f.write(code_string)
 
-        # --- Step 1: Run Security Analysis ---
-        # Call your existing analyze_code function
-        analysis_results = analyze_code(code_string)
+        # --- Step 1: Run Security Analysis (now includes parse tree generation) ---
+        # The analyze_code function already returns the dictionary in the format
+        # expected by the frontend under the 'analysis' key.
+        analysis_output = analyze_code(code_string)
         
         # --- Step 2: Run Compilation and Execution ---
-        # Call your existing compile_and_run_c_code function
-        # This function is designed to compile and run regardless of analysis verdict
         compilation_execution_results = compile_and_run_c_code(temp_filename)
 
         # Combine all results into a single JSON response
         full_report = {
-            "analysis": analysis_results,
-            "compilation_execution": compilation_execution_results
+            "analysis": analysis_output, # Directly use the output from analyze_code
+            "compilation_execution": compilation_execution_results,
+            # The parse_tree info is already INSIDE analysis_output.
+            # No need for a separate 'parse_tree' top-level key if 'analyze_code'
+            # already includes 'parse_tree_image' and 'parse_tree_generated'
+            # within its returned dictionary.
+            # If analyze_code returns 'parse_tree_image' and 'parse_tree_generated'
+            # at its top level, then the frontend should access data.analysis.parse_tree_image.
+            # Your script.js is already doing this: data.parse_tree.generated, data.parse_tree.image_path
+            # Let's adjust script.js to look under data.analysis.parse_tree_...
+            # OR make analyze_code return parse_tree details in a nested dictionary
+            # as previously discussed.
+
+            # Re-reading script.js:
+            # data.parse_tree && data.parse_tree.generated && data.parse_tree.image_path
+            # This implies script.js expects a top-level 'parse_tree' key.
+            # But analyze_code returns parse_tree_image and parse_tree_generated at its root.
+
+            # To fix this, let's adjust the structure of analysis_output in analyze.py
+            # to nest parse_tree information correctly, OR update app.py to construct it.
+
+            # Given analyze.py already has them at root level of its return dict,
+            # it's better to pass them from analyze_output to full_report['parse_tree']
+            # as script.js expects.
+
+            "parse_tree": { # Re-add this explicit nesting as script.js expects
+                "image_path": analysis_output.get("parse_tree_image"),
+                "generated": analysis_output.get("parse_tree_generated")
+            }
         }
         return jsonify(full_report)
 
@@ -81,7 +119,9 @@ def analyze_and_compile_endpoint():
         # The compiled executable cleanup is handled by compile_and_run_c_code itself
 
 
+# app.py
+# ... (rest of your code) ...
+
 if __name__ == '__main__':
     # Run the Flask development server
-    # In a production environment, you would use a WSGI server like Gunicorn or uWSGI
-    app.run(debug=True, port=5000) # debug=True for development, auto-reloads on code changes
+    app.run(debug=True, host='0.0.0.0', port=5000) # ADD host='0.0.0.0'

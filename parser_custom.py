@@ -1,5 +1,6 @@
 # parser_custom.py
 from lexer import tokenize_code # Assuming Lexer is in lexer.py
+from parse_tree_node import ParseTreeNode # NEW: Import ParseTreeNode
 
 class Parser:
     def __init__(self, tokens):
@@ -8,6 +9,8 @@ class Parser:
         self.current_token = None
         self.warnings = [] # Collect warnings/errors here
         self.advance() # Initialize current_token
+
+        self.parse_tree_root = None # NEW: To store the root of the parse tree
 
         # List of functions considered insecure
         self.insecure_functions = [
@@ -33,229 +36,350 @@ class Parser:
 
 
     def advance(self):
+        """Advances to the next token and also returns the token's ParseTreeNode."""
         if self.current_token_index < len(self.tokens):
-            self.current_token = self.tokens[self.current_token_index]
+            token_data = self.tokens[self.current_token_index]
+            self.current_token = token_data
             self.current_token_index += 1
+            # Return a ParseTreeNode for the consumed token
+            return ParseTreeNode(token_data[0], value=token_data[1], is_terminal=True)
         else:
             self.current_token = None # End of tokens
+            return None # No token to advance to
+
 
     def warn(self, message, line_num):
         self.warnings.append(f"{line_num}: {message}")
 
     def match(self, expected_type, expected_value=None):
+        """
+        Attempts to match the current token. If successful, advances and returns
+        the ParseTreeNode for the consumed token. Otherwise, returns None.
+        """
         if self.current_token and \
            self.current_token[0] == expected_type and \
            (expected_value is None or self.current_token[1] == expected_value):
-            self.advance()
-            return True
-        return False
+            # Capture the token's ParseTreeNode before advancing
+            token_pt_node = ParseTreeNode(self.current_token[0], value=self.current_token[1], is_terminal=True)
+            self.advance() # Move to next token
+            return token_pt_node # Return the parse tree node of the matched token
+        return None # No match
+
 
     def expect(self, expected_type, expected_value=None, error_msg="Syntax Error"):
-        if self.match(expected_type, expected_value):
-            return True
-        self.warn(f"❌ Error: {error_msg}", self.current_token[2] if self.current_token else "EOF")
-        return False
+        """
+        Attempts to match the current token. If successful, advances and returns
+        the ParseTreeNode for the consumed token. If not, adds a warning and returns None.
+        """
+        matched_pt_node = self.match(expected_type, expected_value)
+        if matched_pt_node:
+            return matched_pt_node
+        self.warn(f"❌ Error: {error_msg}. Expected {expected_type}{' (' + str(expected_value) + ')' if expected_value else ''}, got {self.current_token[0] if self.current_token else 'EOF'} ('{self.current_token[1]}' if self.current_token and len(self.current_token) > 1 else '')", self.current_token[2] if self.current_token else "EOF")
+        return None
 
     def skip_whitespace_and_comments(self):
-        # Skip whitespace, preprocessor directives, and comments
+        # NEW: We won't return parse tree nodes for skipped tokens,
+        # as they are typically not part of the concrete syntax tree.
         while self.current_token:
             token_type = self.current_token[0]
             if token_type == "WHITESPACE":
                 self.advance()
             elif token_type == "PREPROCESSOR":
-                # We often just skip preprocessor directives for basic parsing
-                self.warn(f"📌 Skipping preprocessor: {self.current_token}", self.current_token[2])
+                self.warn(f"📌 Skipping preprocessor: {self.current_token[1]}", self.current_token[2])
                 self.advance()
             elif token_type == "COMMENT":
                 self.advance()
             else:
-                break # Not a whitespace, preprocessor, or comment, so stop skipping
+                break
 
     def parse(self):
         self.skip_whitespace_and_comments() # Initial skip for global tokens
 
+        # NEW: Create a root node for the entire program's parse tree
+        program_pt_node = ParseTreeNode('Program')
+
         while self.current_token:
             if self.current_token[0] == "KEYWORD" and self.current_token[1] in ["int", "void", "char", "float", "double", "long", "short", "unsigned", "signed"]:
-                self.parse_function_definition()
+                func_def_pt = self.parse_function_definition()
+                if func_def_pt:
+                    program_pt_node.add_child(func_def_pt)
             else:
-                # If it's not a keyword for a function, it's something unrecognized at top level
-                self.warn(f"❌ Error: Invalid function definition", self.current_token[2])
-                self.warn(f"⚠️ Skipping unrecognized token: {self.current_token}", self.current_token[2])
-                self.advance() # Try to advance to avoid infinite loop on bad tokens
-            self.skip_whitespace_and_comments() # Skip between top-level constructs
-        return self.warnings
+                self.warn(f"❌ Error: Invalid top-level construct", self.current_token[2])
+                self.warn(f"⚠️ Skipping unrecognized token: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2])
+                self.advance()
+            self.skip_whitespace_and_comments()
+
+        self.parse_tree_root = program_pt_node # Store the root
+        return self.warnings, self.parse_tree_root # NEW: Return the parse tree root
 
     def parse_function_definition(self):
+        func_def_pt = ParseTreeNode('FunctionDefinition')
+
         # type (e.g., int, void)
-        if not self.expect("KEYWORD"):
-            return
+        type_token_pt = self.expect("KEYWORD")
+        if not type_token_pt: return None
+        func_def_pt.add_child(type_token_pt)
 
         # function name
-        if not self.expect("IDENTIFIER"):
-            return
+        id_token_pt = self.expect("IDENTIFIER")
+        if not id_token_pt: return None
+        func_def_pt.add_child(id_token_pt)
 
         # '('
-        if not self.expect("SEPARATOR", "("):
-            return
+        lparen_pt = self.expect("SEPARATOR", "(")
+        if not lparen_pt: return None
+        func_def_pt.add_child(lparen_pt)
 
         # parameters (simplified: just consume until ')')
-        while self.current_token and not self.match("SEPARATOR", ")"):
-            self.advance() # consume parameter tokens
-        if not self.current_token: # Reached EOF without ')'
-            self.warn("❌ Error: Unclosed function parameters", self.tokens[-1][2] if self.tokens else "EOF")
-            return
+        params_pt = ParseTreeNode('Parameters')
+        func_def_pt.add_child(params_pt) # Add parameters non-terminal
+        while self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == ")"):
+            # We need to capture each parameter token as a child of Parameters
+            param_token_pt = self.advance() # advance already returns the PT node
+            if param_token_pt:
+                params_pt.add_child(param_token_pt)
+            else: # EOF reached
+                self.warn("❌ Error: Unclosed function parameters", self.tokens[-1][2] if self.tokens else "EOF")
+                return None
+        
+        rparen_pt = self.expect("SEPARATOR", ")")
+        if not rparen_pt: return None
+        func_def_pt.add_child(rparen_pt)
 
         # '{' (function body start)
-        if not self.expect("SEPARATOR", "{"):
-            return
+        lbrace_pt = self.expect("SEPARATOR", "{")
+        if not lbrace_pt: return None
+        func_def_pt.add_child(lbrace_pt)
 
         print("✅ Function Declaration Found\n")
-        self.parse_function_body()
+        # Parse function body and add its parse tree to func_def_pt
+        func_body_pt = self.parse_function_body()
+        if func_body_pt:
+            func_def_pt.add_child(func_body_pt)
+        else:
+            return None # Error in body parsing
+
+        return func_def_pt # Return the ParseTreeNode for this function definition
 
 
     def parse_function_body(self):
+        func_body_pt = ParseTreeNode('FunctionBody')
         # Parse statements until '}'
-        while self.current_token and not self.match("SEPARATOR", "}"):
-            self.skip_whitespace_and_comments() # Skip inside function body
-            self.parse_statement()
-        if not self.current_token: # Reached EOF without '}'
+        while self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == "}"):
+            self.skip_whitespace_and_comments()
+            statement_pt = self.parse_statement()
+            if statement_pt:
+                func_body_pt.add_child(statement_pt)
+            else:
+                # If parse_statement returned None, it means an error occurred or
+                # an unhandled token was encountered. We should try to recover.
+                if self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == "}"):
+                    self.warn(f"⚠️ Skipping unparsable token in function body: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2])
+                    self.advance() # Advance to prevent infinite loop
+        
+        rbrace_pt = self.expect("SEPARATOR", "}")
+        if not rbrace_pt:
             self.warn("❌ Error: Unclosed function body", self.tokens[-1][2] if self.tokens else "EOF")
-            return
+            return None
+        func_body_pt.add_child(rbrace_pt)
+
         print("✅ Function Block Closed\n")
+        return func_body_pt
 
     def parse_statement(self):
-        token_type, token_value, token_line = self.current_token
+        statement_pt = ParseTreeNode('Statement')
+        original_token_index = self.current_token_index - 1 # Store starting position for recovery
+        
+        token_type, token_value, token_line = self.current_token if self.current_token else (None, None, None)
 
         # Variable Declaration (simplified: Type Identifier;)
         if token_type == "KEYWORD" and token_value in ["int", "char", "float", "double", "long", "short", "unsigned", "signed"]:
-            self.advance() # Consume type keyword
-            if self.match("IDENTIFIER"): # Variable name
+            type_token_pt = self.advance() # Consume type keyword
+            statement_pt.add_child(type_token_pt)
+
+            id_token_pt = self.match("IDENTIFIER") # Variable name
+            if id_token_pt:
+                statement_pt.add_child(id_token_pt)
                 # Handle array declarations (e.g., `char arr[10];`)
-                if self.match("OPERATOR", "["):
-                    while self.current_token and not self.match("OPERATOR", "]"):
-                        self.advance() # Consume array size tokens
+                if self.current_token and self.current_token[0] == "OPERATOR" and self.current_token[1] == "[":
+                    lsquare_pt = self.advance()
+                    statement_pt.add_child(lsquare_pt)
+                    # Consume array size tokens (simplified, just advance over them)
+                    array_size_pt = ParseTreeNode('ArraySize') # New non-terminal for array size
+                    statement_pt.add_child(array_size_pt)
+                    while self.current_token and not (self.current_token[0] == "OPERATOR" and self.current_token[1] == "]"):
+                        size_token_pt = self.advance()
+                        if size_token_pt: array_size_pt.add_child(size_token_pt)
+                        else: break # EOF
+                    rsquare_pt = self.expect("OPERATOR", "]")
+                    if rsquare_pt: statement_pt.add_child(rsquare_pt)
                     print("✅ Array Declaration\n")
-            if self.expect("SEPARATOR", ";", "Missing ';' in declaration"):
+            else:
+                self.warn(f"❌ Error: Expected identifier after type keyword", token_line)
+                return None # Failed to parse
+
+            semicolon_pt = self.expect("SEPARATOR", ";", "Missing ';' in declaration")
+            if semicolon_pt:
+                statement_pt.add_child(semicolon_pt)
                 print("✅ Variable Declaration\n")
-            return
+                return statement_pt
+            return None # Failed to parse
 
         # Return statement
-        if token_type == "KEYWORD" and token_value == "return":
-            self.advance() # Consume 'return'
-            self.parse_expression() # Consume the expression after return
-            if self.expect("SEPARATOR", ";", "Missing ';' after return statement"):
+        elif token_type == "KEYWORD" and token_value == "return":
+            return_token_pt = self.advance() # Consume 'return'
+            statement_pt.add_child(return_token_pt)
+
+            expr_pt = self.parse_expression() # Consume the expression after return
+            if expr_pt:
+                statement_pt.add_child(expr_pt)
+            else:
+                # This could be a "return;" statement without an expression
+                # Or an error. Let's assume 'return;' is valid here.
+                pass 
+            
+            semicolon_pt = self.expect("SEPARATOR", ";", "Missing ';' after return statement")
+            if semicolon_pt:
+                statement_pt.add_child(semicolon_pt)
                 print("✅ Return Statement\n")
-            return
+                return statement_pt
+            return None # Failed to parse
 
         # If/While/For (simplified: just consume the structure without detailed parsing)
-        if token_type == "KEYWORD" and token_value in ["if", "while", "for"]:
+        elif token_type == "KEYWORD" and token_value in ["if", "while", "for"]:
+            keyword_pt = self.advance()
+            statement_pt.add_child(keyword_pt)
+
             self.warn(f"📌 Skipping control flow structure: {token_value}", token_line)
-            self.advance() # Consume keyword
-            if self.match("SEPARATOR", "("): # Consume condition
-                while self.current_token and not self.match("SEPARATOR", ")"):
-                    self.advance()
-            if self.current_token and self.current_token[0] == "SEPARATOR" and self.current_token[1] == "{": # Consume block
-                self.advance()
-                self.parse_function_body() # Treat block like a mini-function body
+            
+            lparen_pt = self.match("SEPARATOR", "(") # Consume condition start
+            if lparen_pt:
+                statement_pt.add_child(lparen_pt)
+                condition_pt = ParseTreeNode('Condition') # New non-terminal
+                statement_pt.add_child(condition_pt)
+                while self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == ")"):
+                    cond_token_pt = self.advance()
+                    if cond_token_pt: condition_pt.add_child(cond_token_pt)
+                    else: break # EOF
+                rparen_pt = self.expect("SEPARATOR", ")")
+                if rparen_pt: statement_pt.add_child(rparen_pt)
+            
+            # Handle the block or single statement body
+            if self.current_token and self.current_token[0] == "SEPARATOR" and self.current_token[1] == "{":
+                lbrace_pt = self.advance()
+                statement_pt.add_child(lbrace_pt)
+                block_body_pt = self.parse_function_body() # Treat block like a mini-function body
+                if block_body_pt: statement_pt.add_child(block_body_pt)
             else: # Single statement or unparsed block
-                self.parse_statement() # Attempt to parse the next statement
-            return
+                single_stmt_pt = self.parse_statement() # Attempt to parse the next statement
+                if single_stmt_pt: statement_pt.add_child(single_stmt_pt)
+            
+            return statement_pt
 
         # Expression Statement (e.g., function call, assignment)
-        # This is the most common type of statement not covered by other rules.
-        if token_type == "IDENTIFIER" or token_type == "NUMBER" or token_type == "STRING" or token_type == "OPERATOR":
-            self.parse_expression_statement()
-            return
+        elif token_type in ["IDENTIFIER", "NUMBER", "STRING", "OPERATOR"] or \
+             (token_type == "SEPARATOR" and token_value == '('): # Allow expressions starting with (
+            expr_stmt_pt = self.parse_expression_statement()
+            if expr_stmt_pt:
+                statement_pt.add_child(expr_stmt_pt)
+                return statement_pt
+            return None # Failed to parse
 
         # Unrecognized token as a statement
-        self.warn(f"⚠️ Skipping unknown/unhandled token as statement: {self.current_token}", token_line)
+        self.warn(f"⚠️ Skipping unknown/unhandled token as statement: {self.current_token[1]} (type: {self.current_token[0]})", token_line)
         self.advance() # Advance to avoid infinite loop
-
+        return None # Indicate failure to parse this statement
 
     def parse_expression(self):
-        # Extremely simplified expression parsing: just consume tokens until a semicolon or end of line/block
-        # This will not actually build an expression tree, just skip over it.
+        expr_pt = ParseTreeNode('Expression')
+        # This function needs to be more robust to build a proper expression sub-tree.
+        # For simplicity, we'll continue to consume tokens for the expression,
+        # but now we capture them as children of the Expression node.
+
         while self.current_token and \
-              self.current_token[0] not in ["SEPARATOR", "KEYWORD", "OPERATOR"] and \
-              self.current_token[1] not in [";", "{", "}", ")", "]", ","]:
-            self.advance()
-        # Handle cases where it's a number, string, or identifier followed by an operator
-        if self.current_token and self.current_token[0] in ["NUMBER", "STRING", "IDENTIFIER"]:
-             self.advance()
-        if self.current_token and self.current_token[0] == "OPERATOR" and self.current_token[1] != ";": # Consume operators
-            self.advance() # Consume the operator
-            self.parse_expression() # And whatever follows it
+              not (self.current_token[0] == "SEPARATOR" and self.current_token[1] in [";", "{", "}", ")", "]", ","]):
+            
+            token_type, token_value, _ = self.current_token
+
+            # Handle parentheses for sub-expressions
+            if token_type == "SEPARATOR" and token_value == "(":
+                lparen_pt = self.advance()
+                expr_pt.add_child(lparen_pt)
+                sub_expr_pt = self.parse_expression() # Recursive call for nested expression
+                if sub_expr_pt: expr_pt.add_child(sub_expr_pt)
+                rparen_pt = self.expect("SEPARATOR", ")", "Unclosed parenthesis in expression")
+                if rparen_pt: expr_pt.add_child(rparen_pt)
+            
+            # Handle array access (e.g., `arr[index]`) within expressions
+            elif token_type == "OPERATOR" and token_value == "[":
+                lsquare_pt = self.advance()
+                expr_pt.add_child(lsquare_pt)
+                array_index_expr_pt = self.parse_expression() # Index itself can be an expression
+                if array_index_expr_pt: expr_pt.add_child(array_index_expr_pt)
+                rsquare_pt = self.expect("OPERATOR", "]", "Unclosed bracket in array access")
+                if rsquare_pt: expr_pt.add_child(rsquare_pt)
+
+            else: # Consume general expression tokens (ID, NUMBER, STRING, OPERATOR)
+                current_token_pt = self.advance()
+                if current_token_pt:
+                    expr_pt.add_child(current_token_pt)
+                else: # EOF or unexpected token
+                    break
+        
+        # If no children were added, it means the expression was empty or just a terminal
+        if not expr_pt.children:
+            return None # Indicate no valid expression was found
+        
+        return expr_pt
 
 
     def parse_expression_statement(self):
-        token_type, token_value, token_line = self.current_token
+        expr_stmt_pt = ParseTreeNode('ExpressionStatement')
+        token_type, token_value, token_line = self.current_token if self.current_token else (None, None, None)
         current_line = token_line # Store current line for warnings
 
         # This part handles things like function calls or assignments
         # Check for explicitly insecure functions (this needs to be robust)
         if token_type == "IDENTIFIER" and token_value in self.insecure_functions:
             self.check_insecure_function(token_value, current_line)
-
-        # Advance past the identifier or initial token of the expression
-        self.advance()
-
-        # Simplified parsing of whatever follows (function call, assignment, etc.)
-        # Consume tokens until a semicolon, brace, or parenthesis closure
-        while self.current_token and \
-              self.current_token[0] != "SEPARATOR" or \
-              self.current_token[1] not in [";", "{", "}"]: # Stop before potential block/end
-            # If it's an opening parenthesis, consume until closing one
-            if self.current_token[0] == "SEPARATOR" and self.current_token[1] == "(":
-                self.advance() # Consume '('
-                while self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == ")"):
-                    self.advance()
-                if self.current_token and self.current_token[0] == "SEPARATOR" and self.current_token[1] == ")":
-                    self.advance() # Consume ')'
-                    print("✅ Function Call\n") # Assume it was a function call if ()
-                else:
-                    self.warn(f"❌ Error: Unclosed parenthesis in expression/call", current_line)
-                    break # Break to avoid infinite loop
-            # Handle array access [ ]
-            elif self.current_token[0] == "OPERATOR" and self.current_token[1] == "[":
-                self.advance() # Consume '['
-                while self.current_token and not (self.current_token[0] == "OPERATOR" and self.current_token[1] == "]"):
-                    self.advance()
-                if self.current_token and self.current_token[0] == "OPERATOR" and self.current_token[1] == "]":
-                    self.advance() # Consume ']'
-                else:
-                    self.warn(f"❌ Error: Unclosed bracket in array access", current_line)
-                    break # Break to avoid infinite loop
-            else:
-                self.advance() # Consume other tokens in the expression
-
+            
+        # Parse the initial part of the expression (identifier, number, etc.)
+        initial_expr_pt = self.parse_expression()
+        if initial_expr_pt:
+            expr_stmt_pt.add_child(initial_expr_pt)
+        else:
+            # If the initial expression cannot be parsed, it's an error
+            self.warn(f"❌ Error: Cannot parse beginning of expression statement at token '{token_value}'", current_line)
+            return None
+        
         # Expect a semicolon to end the statement
-        if self.match("SEPARATOR", ";"):
-            # If it was a function call, we've already printed that
-            # If it was an assignment, we should print that
-            # For now, just a generic "Expression Statement"
+        semicolon_pt = self.match("SEPARATOR", ";")
+        if semicolon_pt:
+            expr_stmt_pt.add_child(semicolon_pt)
             # print("✅ Expression Statement\n") # Commented out to avoid double print with Function Call
-            pass
+            return expr_stmt_pt
         else:
             self.warn("❌ Error: Missing ';' in statement", current_line)
-
+            return None # Indicate parse failure
 
     def check_insecure_function(self, func_name, line_num):
         info = self.insecure_function_info.get(func_name)
         if info:
             fix_suggestion, cwe = info
-            self.warn(f"❌ Use of insecure function {func_name}() detected.", line_num)
-            self.warn(f"    💡 Suggested fix: {fix_suggestion}. [CWE-{cwe}]", line_num)
+            self.warnings.append(f"❌ Use of insecure function {func_name}() detected. {line_num}: Suggested fix: {fix_suggestion}. [CWE-{cwe}]")
         else:
-            self.warn(f"❌ Detected use of '{func_name}' (marked as insecure).", line_num)
+            self.warnings.append(f"❌ Detected use of '{func_name}' (marked as insecure). {line_num}")
 
 
 # --- Example Usage (for testing parser_custom.py independently) ---
 if __name__ == "__main__":
+    from lexer import Lexer # Import the Lexer class for testing
+
     test_code = """
     // This is a test comment
     #include <stdio.h> // Another comment
     /* Multi-line
-       comment */
+      comment */
     int main() {
         char buffer[10];
         // strcpy(buffer, "too long string"); // This should be flagged
@@ -263,22 +387,24 @@ if __name__ == "__main__":
         gets(buffer); // This should be flagged
         if (1) {
             int x = 5;
+            x = x + 1;
         }
         return 0;
     }
 
-    void another_func() {
+    void another_func(int a, char* b) {
         printf("Vulnerable printf here.\\n"); // This should be flagged
         int* ptr = malloc(10 * sizeof(int)); // Should be flagged
         if (ptr == NULL) { /* handle error */ }
         free(ptr); // Not flagged
     }
     """
+    
     lexer = Lexer(test_code)
-    tokens = lexer.tokenize()
+    tokens = list(lexer.tokenize()) # Ensure tokens is a list
 
     parser = Parser(tokens)
-    warnings = parser.parse()
+    warnings, parse_tree_root = parser.parse() # NEW: Get the parse_tree_root
 
     print("\n--- Parser Warnings/Errors ---")
     if warnings:
@@ -287,10 +413,19 @@ if __name__ == "__main__":
     else:
         print("No parser-specific warnings or errors detected (apart from expected insecure function warnings).")
 
-    # This part should be handled by analyze.py and main.py
-    # print("\n--- Insecure Function Detections ---")
-    # if parser.insecure_function_warnings:
-    #    for warning in parser.insecure_function_warnings:
-    #        print(warning)
-    # else:
-    #    print("No insecure functions detected.")
+    print("\n--- Generated Parse Tree ---")
+    if parse_tree_root:
+        parse_tree_root.print_tree()
+        
+        # --- Visualization (Requires visualize_tree.py and Graphviz installation) ---
+        try:
+            from visualize_tree import create_parse_tree_graph
+            create_parse_tree_graph(parse_tree_root, 'output_parse_tree')
+            print("\nParse tree image generated: output_parse_tree.png")
+        except ImportError:
+            print("\n'visualize_tree.py' or 'graphviz' library not found. Skipping visualization.")
+        except Exception as e:
+            print(f"\nError during parse tree visualization: {e}")
+            print("Make sure Graphviz is installed and added to your system's PATH.")
+    else:
+        print("No parse tree was generated.")

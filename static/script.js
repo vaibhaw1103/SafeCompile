@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const codeInput = document.getElementById('code-input');
-    const lineNumbersDiv = document.getElementById('line-numbers'); // New line numbers element
+    const lineNumbersDiv = document.getElementById('line-numbers');
     const compileButton = document.getElementById('compile-button');
     const analyzeButton = document.getElementById('analyze-button');
     const clearButton = document.getElementById('clear-button');
@@ -15,6 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Loading indicators
     const compilerLoading = document.getElementById('compiler-loading');
     const programLoading = document.getElementById('program-loading');
+    const parseTreeLoading = document.getElementById('parseTreeLoading'); 
+
+    // Parse tree elements
+    const parseTreeImage = document.getElementById('parseTreeImage');
+    const parseTreeStatus = document.getElementById('parseTreeStatus');
+
+    // Modal elements
+    const parseTreeModal = document.getElementById('parseTreeModal');
+    const modalParseTreeImage = document.getElementById('modalParseTreeImage');
+    const closeButton = document.getElementsByClassName('close-button')[0];
+
 
     // Default code snippet for convenience
     const defaultCode = `
@@ -71,7 +82,14 @@ int main() {
 
     // --- Helper for showing/hiding loading indicators ---
     const showLoading = (element, loader) => {
-        element.textContent = '';
+        // Clear element's existing content or ensure it's not visually blocking
+        // For image element, we just ensure it's hidden before loading
+        if (element.tagName === 'IMG') {
+            element.style.display = 'none'; // Hide image while loading starts
+            element.src = ''; // Clear source
+        } else {
+            element.textContent = '';
+        }
         loader.classList.remove('hidden');
     };
 
@@ -89,6 +107,13 @@ int main() {
         errorMessageSection.classList.add('hidden');
         hideLoading(compilerLoading);
         hideLoading(programLoading);
+
+        // Reset parse tree display
+        parseTreeImage.src = '';
+        parseTreeImage.style.display = 'none'; // Ensure image is hidden
+        parseTreeStatus.textContent = 'Run analysis to generate parse tree...';
+        hideLoading(parseTreeLoading);
+        parseTreeImage.removeEventListener('click', openParseTreeModal); // Remove listener on reset
     };
 
     // --- Handle Clear Button ---
@@ -97,6 +122,31 @@ int main() {
         resetOutput();
         updateLineNumbers(); // Update line numbers after clearing
     });
+
+    // --- Modal Functions ---
+    const openParseTreeModal = () => {
+        if (parseTreeImage.src) { // Only open if an image is loaded
+            modalParseTreeImage.src = parseTreeImage.src;
+            parseTreeModal.style.display = 'flex'; // Use flex for centering
+            document.body.style.overflow = 'hidden'; // Prevent scrolling background
+        }
+    };
+
+    const closeParseTreeModal = () => {
+        parseTreeModal.style.display = 'none';
+        modalParseTreeImage.src = ''; // Clear modal image
+        document.body.style.overflow = 'auto'; // Restore scrolling
+    };
+
+    // Attach click listener to close button
+    closeButton.addEventListener('click', closeParseTreeModal);
+    // Close modal if user clicks outside of the image (on the modal background)
+    window.addEventListener('click', (event) => {
+        if (event.target == parseTreeModal) {
+            closeParseTreeModal();
+        }
+    });
+
 
     // --- Universal Analyze & Compile Function ---
     const analyzeAndCompile = async (analyzeOnly = false) => {
@@ -107,8 +157,11 @@ int main() {
             return;
         }
 
-        resetOutput();
+        resetOutput(); // Reset everything including image
         showLoading(compilerOutputDiv, compilerLoading); // Show loading for compiler
+        showLoading(parseTreeImage, parseTreeLoading); // Show loading for parse tree
+        parseTreeStatus.textContent = "Generating parse tree..."; 
+        
         if (!analyzeOnly) {
             showLoading(programOutputDiv, programLoading); // Show loading for program output only if compiling
         }
@@ -119,7 +172,7 @@ int main() {
         clearButton.disabled = true;
 
         try {
-            const endpoint = analyzeOnly ? '/analyze_code_only' : '/analyze_and_compile';
+            const endpoint = '/analyze_and_compile';
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -133,8 +186,8 @@ int main() {
             if (response.ok) {
                 // Display Analysis Report
                 if (data.analysis && data.analysis.report_messages) {
-                    analysisPlaceholder.classList.add('hidden'); // Hide placeholder
-                    securityVulnerabilitiesDiv.innerHTML = ''; // Clear previous content
+                    analysisPlaceholder.classList.add('hidden');
+                    securityVulnerabilitiesDiv.innerHTML = ''; 
 
                     const staticIssues = data.analysis.static_issues || [];
                     const mlVulnerable = data.analysis.ml_vulnerable;
@@ -169,8 +222,7 @@ int main() {
 
                         staticIssues.forEach(issue => {
                             const issueCard = document.createElement('div');
-                            // Determine color based on common keywords for errors/warnings
-                            let bgColor = 'bg-yellow-700'; // Default to warning
+                            let bgColor = 'bg-yellow-700';
                             if (issue.includes('Error:') || issue.includes('CRITICAL')) {
                                 bgColor = 'bg-red-700';
                             } else if (issue.includes('Warning:')) {
@@ -185,7 +237,7 @@ int main() {
                         });
                     }
                     if (staticIssues.length === 0 && mlVulnerable === false && !overallSafe) {
-                         securityVulnerabilitiesDiv.innerHTML += '<p class="text-gray-400 mt-2">No direct static rule violations detected.</p>';
+                        securityVulnerabilitiesDiv.innerHTML += '<p class="text-gray-400 mt-2">No direct static rule violations detected.</p>';
                     }
 
                     // Display full report messages at the end
@@ -196,6 +248,26 @@ int main() {
 
                 } else {
                     securityVulnerabilitiesDiv.innerHTML = '<p class="text-gray-500 text-center py-4">No security analysis report available.</p>';
+                }
+
+                // Display Parse Tree Image
+                hideLoading(parseTreeLoading);
+                if (data.parse_tree && data.parse_tree.generated && data.parse_tree.image_path) {
+                    const imageUrl = `/static/${data.parse_tree.image_path}`; 
+                    parseTreeImage.src = imageUrl;
+                    // Force the image to display (override any previous display:none)
+                    parseTreeImage.style.display = 'block'; 
+                    parseTreeStatus.textContent = "Parse tree generated successfully. Click on image to view full size."; 
+                    // Add click listener for modal after the image source is set
+                    parseTreeImage.addEventListener('click', openParseTreeModal);
+                } else {
+                    parseTreeImage.style.display = 'none'; 
+                    const graphvizError = data.analysis.report_messages.some(msg => msg.includes("Graphviz is not installed"));
+                    if (graphvizError) {
+                        parseTreeStatus.textContent = "Parse tree visualization failed: Graphviz is not installed or not in server's PATH.";
+                    } else {
+                        parseTreeStatus.textContent = "Parse tree could not be generated (possible parsing errors or empty code).";
+                    }
                 }
 
 
@@ -211,13 +283,11 @@ int main() {
                     if (data.compilation_execution && data.compilation_execution.program_output) {
                         programOutputDiv.textContent = data.compilation_execution.program_output;
                     } else if (data.compilation_execution && data.compilation_execution.error_message) {
-                        // If program crashed, program_output might be empty, but error_message in compilation_execution will explain.
                         programOutputDiv.textContent = `Program did not produce output due to: ${data.compilation_execution.error_message}`;
                     } else {
                         programOutputDiv.textContent = 'No program output.';
                     }
                 } else {
-                    // For analyze-only, clear compile/program output
                     compilerOutputDiv.textContent = 'Compilation not performed in Analyze mode.';
                     programOutputDiv.textContent = 'Program not executed in Analyze mode.';
                 }
@@ -230,18 +300,17 @@ int main() {
                 }
 
             } else {
-                // Handle server-side errors (e.g., if Flask returns a 4xx or 5xx status)
                 errorMessageDiv.textContent = data.error || `Server responded with status: ${response.status} - ${response.statusText}`;
                 errorMessageSection.classList.remove('hidden');
             }
         } catch (error) {
-            // Handle network errors or issues with parsing JSON
             console.error('Fetch error:', error);
             errorMessageDiv.textContent = `A network error occurred or the server is unreachable: ${error.message}. Please check your Flask server.`;
             errorMessageSection.classList.remove('hidden');
         } finally {
             hideLoading(compilerLoading);
             hideLoading(programLoading);
+            hideLoading(parseTreeLoading);
             compileButton.disabled = false;
             analyzeButton.disabled = false;
             clearButton.disabled = false;
