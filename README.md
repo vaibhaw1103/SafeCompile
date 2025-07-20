@@ -1,69 +1,70 @@
-# SafeCompile 🔐
+# SafeCompile: AI-Powered Secure Code Compiler
 
-**SafeCompile** is a compiler design project that performs lexical analysis, syntax analysis, 
-and static rule-based vulnerability detection in C code.
+A web-based IDE that uses a multi-layered approach, including LLMs and static analysis, to detect security vulnerabilities in C code before execution.
 
----
+![SafeCompile Demo](https://via.placeholder.com/800x400.png?text=Add+A+Screenshot+Or+GIF+Here)
 
-## 📌 Features
 
-- **Lexical Analyzer**: Tokenizes C code into keywords, identifiers, operators, etc.
-- **Syntax Analyzer**: Parses C code for valid function declarations, assignments, and returns.
-- **Static Rule Engine**: Detects security vulnerabilities such as:
-  - Use of unsafe functions: `gets()`, `strcpy()`, `sprintf()`, etc.
-  - Format string risks: `scanf("%s")`, `%n` usage
-  - Hardcoded passwords
-  - Unchecked `malloc()` returns
-  - Command injection via `system()`
-  - Usage of `eval()`
+## ✨ Features
 
----
+- **Multi-Layered Security Analysis**: Combines AI (via LLMs), machine learning (CodeBERT), a custom parser, and pattern matching for comprehensive vulnerability detection.
+- **Sandboxed Execution**: User-submitted C code is compiled and run inside a secure, isolated Docker container to protect the host system.
+- **Interactive Web UI**: A clean, modern interface built with Flask, Socket.IO, Monaco Editor (for a VS-Code like experience), and Xterm.js for a real-time terminal.
+- **Real-time Feedback**: Get instant analysis results, compiler errors, and program output streamed directly to the UI.
+- **Parse Tree Visualization**: Generates and displays a visual parse tree of the submitted code for educational and debugging purposes.
 
-## ✅ How to Use
+## 🛠️ Tech Stack
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/SafeCompile.git
-   cd SafeCompile
-   ```
+- **Backend**: Python, Flask, Flask-SocketIO
+- **AI & ML**: OpenAI API (via OpenRouter), PyTorch, Transformers (CodeBERT), Scikit-learn
+- **Execution Environment**: Docker
+- **Frontend**: HTML5, Tailwind CSS, JavaScript
+- **Core Components**: Monaco Editor, Xterm.js, Gunicorn
 
-2. Open `SafeCompile.ipynb` in **Jupyter Notebook** or **JupyterLab**.
+## 🚀 How to Run Locally
 
-3. Paste your C code in the provided input cell.
+Follow these steps to set up and run the project on your local machine.
 
-4. Run all cells to see token stream, parse structure, and vulnerability warnings.
+### Prerequisites
 
----
+- Python 3.9+
+- Docker Desktop
+- Git
 
-## 📂 Project Structure
+### Installation & Setup
 
-```
-SafeCompile/
-├── SafeCompile.ipynb         # Main notebook with lexer, parser, and rule engine
-├── README.md                 # Project overview and usage instructions
-```
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/vaibhaw1103/SafeCompile.git](https://github.com/vaibhaw1103/SafeCompile.git)
+    cd SafeCompile
+    ```
 
----
+2.  **Create a virtual environment (recommended):**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    ```
 
-## 👨‍💻 Team
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-- [Your Name] (Team Leader)
-- [Member 2 Name]
-- [Member 3 Name]
-- [Member 4 Name]
+4.  **Set up your API Key:**
+    The application loads your OpenRouter API key from an environment variable. You can set it in your terminal before running the app.
+    
+    **On macOS/Linux:**
+    ```bash
+    export OPENROUTER_API_KEY="your_secret_key_here"
+    ```
+    **On Windows (Command Prompt):**
+    ```bash
+    set OPENROUTER_API_KEY="your_secret_key_here"
+    ```
 
-> A B.Tech 3rd Year project submitted under Compiler Design subject.
+5.  **Run the application:**
+    ```bash
+    python app.py
+    ```
 
----
-
-## 📚 Technologies Used
-
-- Python 3.x
-- Jupyter Notebook
-- Regex for lexical analysis
-
----
-
-## 🛡️ Why This Project?
-
-Secure coding is critical in modern software. This project addresses the gap between learning compilers and real-world code quality issues by identifying vulnerabilities during compilation, not post-deployment.
+Open your browser and navigate to `http://127.0.0.1:5000` to see the application live.
