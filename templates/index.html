@@ -32,6 +32,7 @@
         }
         /* Styles for line numbers */
         .line-numbers-container {
+<<<<<<< HEAD
             display: flex;
             height: 500px; /* Match textarea height */
             overflow: hidden; /* Hide scrollbar for line numbers */
@@ -71,6 +72,72 @@
             box-sizing: border-box; /* Include padding and border in the element's total width and height */
         }
     </style>
+=======
+        display: flex;
+        height: 500px; /* Match textarea height */
+        overflow: hidden; /* Hide scrollbar for line numbers */
+        position: relative;
+    }
+    .line-numbers {
+        background-color: #1a202c; /* Darker background for numbers */
+        color: #6B7280; /* Text color for numbers */
+        padding: 24px 10px 24px 10px; /* Match textarea padding-left and top/bottom */
+        text-align: right;
+        user-select: none; /* Prevent selection of line numbers */
+        flex-shrink: 0; /* Don't let it shrink */
+        font-size: 1.125rem; /* Match textarea text-lg */
+        line-height: 1.75rem; /* Match textarea line-height */
+        overflow-y: hidden; /* Hide vertical scrollbar */
+    }
+    .line-numbers span {
+        display: block;
+    }
+    .code-textarea {
+        padding-left: 10px !important; /* Adjust textarea padding to align with numbers */
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+
+    /* Modal Styles */
+    .modal {
+        display: none; /* Hidden by default */
+        position: fixed; /* Stay in place */
+        z-index: 1000; /* Sit on top */
+        left: 0;
+        top: 0;
+        width: 100%; /* Full width */
+        height: 100%; /* Full height */
+        overflow: auto; /* Enable scroll if needed */
+        background-color: rgba(0,0,0,0.9); /* Black w/ opacity */
+        justify-content: center;
+        align-items: center;
+    }
+    .modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+    .close-button {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        transition: 0.3s;
+        cursor: pointer;
+    }
+    .close-button:hover,
+    .close-button:focus {
+        color: #bbb;
+        text-decoration: none;
+        cursor: pointer;
+    }
+</style>
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
 </head>
 <body class="bg-gray-900 text-gray-200 min-h-screen p-8">
     <div class="max-w-7xl mx-auto">
@@ -80,6 +147,7 @@
             <p class="text-xl text-gray-400 mt-1">AI-Powered Secure Code Compiler</p>
         </header>
 
+<<<<<<< HEAD
         <!-- Main Layout: Input + Vulnerabilities -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <!-- Code Input Area -->
@@ -94,6 +162,19 @@
                     <div class="line-numbers-container bg-gray-900">
                         <div id="line-numbers" class="line-numbers code-font"></div>
                         <textarea id="code-input" rows="20" class="code-textarea w-full h-[500px] p-6 bg-gray-900 text-gray-200 text-lg code-font focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="// Write your C code here...">
+=======
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="md:col-span-2">
+            <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+                <div class="flex p-3 border-b border-gray-700">
+                    <button id="compile-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Compile</button>
+                    <button id="analyze-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Analyze</button>
+                    <button id="clear-button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-md text-lg transition-colors">Clear</button>
+                </div>
+                <div class="line-numbers-container bg-gray-900">
+                    <div id="line-numbers" class="line-numbers code-font"></div>
+                    <textarea id="code-input" rows="20" class="code-textarea w-full h-[500px] p-6 bg-gray-900 text-gray-200 text-lg code-font focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="// Write your C code here...">
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
 #include <stdio.h>
 #include <string.h> // For vulnerable strcpy
 
@@ -122,6 +203,7 @@ int main() {
                 </div>
             </div>
 
+<<<<<<< HEAD
             <!-- Security Vulnerabilities / Analysis Report -->
             <div>
                 <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
@@ -174,8 +256,75 @@ int main() {
             <div id="error-message" class="text-red-200 code-font"></div>
         </div>
 
+=======
+           <div>
+            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
+            <div id="security-vulnerabilities" class="bg-gray-800 rounded-lg shadow-xl p-6 h-[500px] overflow-y-auto">
+                <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see vulnerabilities...</p>
+            </div>
+        </div>
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
     </div>
 
-    <script src="/static/script.js"></script>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div>
+            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Compiled Output</h2>
+            <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
+                <div id="compiler-output" class="whitespace-pre-wrap"></div>
+                <div id="compiler-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
+                    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Program Output</h2>
+            <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
+                <div id="program-output" class="whitespace-pre-wrap"></div>
+                <div id="program-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
+                    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parse Tree Visualization Section -->
+    <div class="mt-6">
+        <h2 class="text-2xl font-semibold text-gray-100 mb-3">Parse Tree Visualization</h2>
+        <div id="parseTreeContainer" class="bg-gray-800 rounded-lg shadow-xl p-6 text-center relative overflow-hidden">
+            <img id="parseTreeImage" src="" alt="Generated Parse Tree" 
+                 class="max-w-full h-auto mx-auto rounded-md border border-gray-700 cursor-pointer" 
+                 style="display: none; object-fit: contain; max-height: 600px; min-height: 100px;"> <!-- Added min-height -->
+            <p id="parseTreeStatus" class="text-gray-500 text-center py-4">Run analysis to generate parse tree...</p>
+            <div id="parseTreeLoading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
+                <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-message-section" class="bg-red-800 p-4 rounded-lg shadow-xl mt-6 hidden">
+        <h2 class="text-2xl font-semibold text-red-300 mb-3">Error</h2>
+        <div id="error-message" class="text-red-200 code-font"></div>
+    </div>
+
+</div>
+
+<!-- The Modal -->
+<div id="parseTreeModal" class="modal">
+    <span class="close-button">&times;</span>
+    <img class="modal-content" id="modalParseTreeImage">
+</div>
+
+<script src="/static/script.js"></script>
+
 </body>
 </html>

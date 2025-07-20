@@ -19,6 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Loading indicators
     const compilerLoading = document.getElementById('compiler-loading');
     const programLoading = document.getElementById('program-loading');
+    const parseTreeLoading = document.getElementById('parseTreeLoading'); 
+
+    // Parse tree elements
+    const parseTreeImage = document.getElementById('parseTreeImage');
+    const parseTreeStatus = document.getElementById('parseTreeStatus');
+
+    // Modal elements
+    const parseTreeModal = document.getElementById('parseTreeModal');
+    const modalParseTreeImage = document.getElementById('modalParseTreeImage');
+    const closeButton = document.getElementsByClassName('close-button')[0];
+
 
     const errorMessageSection = document.getElementById('error-message-section');
     const errorMessageDiv = document.getElementById('error-message');
@@ -76,7 +87,14 @@ int main() {
 
     // --- Helper for showing/hiding loading indicators ---
     const showLoading = (element, loader) => {
-        element.textContent = '';
+        // Clear element's existing content or ensure it's not visually blocking
+        // For image element, we just ensure it's hidden before loading
+        if (element.tagName === 'IMG') {
+            element.style.display = 'none'; // Hide image while loading starts
+            element.src = ''; // Clear source
+        } else {
+            element.textContent = '';
+        }
         loader.classList.remove('hidden');
     };
 
@@ -104,7 +122,17 @@ int main() {
         errorMessageSection.classList.add('hidden');
         hideLoading(compilerLoading);
         hideLoading(programLoading);
+<<<<<<< HEAD
         currentSessionId = null; // Clear session ID
+=======
+
+        // Reset parse tree display
+        parseTreeImage.src = '';
+        parseTreeImage.style.display = 'none'; // Ensure image is hidden
+        parseTreeStatus.textContent = 'Run analysis to generate parse tree...';
+        hideLoading(parseTreeLoading);
+        parseTreeImage.removeEventListener('click', openParseTreeModal); // Remove listener on reset
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
     };
 
     // --- Handle Clear Button ---
@@ -114,7 +142,36 @@ int main() {
         updateLineNumbers();
     });
 
+<<<<<<< HEAD
     // --- Core Compile/Analyze Logic ---
+=======
+    // --- Modal Functions ---
+    const openParseTreeModal = () => {
+        if (parseTreeImage.src) { // Only open if an image is loaded
+            modalParseTreeImage.src = parseTreeImage.src;
+            parseTreeModal.style.display = 'flex'; // Use flex for centering
+            document.body.style.overflow = 'hidden'; // Prevent scrolling background
+        }
+    };
+
+    const closeParseTreeModal = () => {
+        parseTreeModal.style.display = 'none';
+        modalParseTreeImage.src = ''; // Clear modal image
+        document.body.style.overflow = 'auto'; // Restore scrolling
+    };
+
+    // Attach click listener to close button
+    closeButton.addEventListener('click', closeParseTreeModal);
+    // Close modal if user clicks outside of the image (on the modal background)
+    window.addEventListener('click', (event) => {
+        if (event.target == parseTreeModal) {
+            closeParseTreeModal();
+        }
+    });
+
+
+    // --- Universal Analyze & Compile Function ---
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
     const analyzeAndCompile = async (analyzeOnly = false) => {
         const code = codeInput.value;
         if (!code.trim()) {
@@ -123,8 +180,16 @@ int main() {
             return;
         }
 
+<<<<<<< HEAD
         resetOutput(); // Reset all outputs and hide input elements
         showLoading(compilerOutputContent, compilerLoading);
+=======
+        resetOutput(); // Reset everything including image
+        showLoading(compilerOutputDiv, compilerLoading); // Show loading for compiler
+        showLoading(parseTreeImage, parseTreeLoading); // Show loading for parse tree
+        parseTreeStatus.textContent = "Generating parse tree..."; 
+        
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
         if (!analyzeOnly) {
             showLoading(programOutputDiv, programLoading);
         }
@@ -134,7 +199,7 @@ int main() {
         clearButton.disabled = true;
 
         try {
-            const endpoint = analyzeOnly ? '/analyze_code_only' : '/analyze_and_compile';
+            const endpoint = '/analyze_and_compile';
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -149,7 +214,12 @@ int main() {
                 // Display Analysis Report (common for both modes)
                 if (data.analysis && data.analysis.report_messages) {
                     analysisPlaceholder.classList.add('hidden');
+<<<<<<< HEAD
                     securityVulnerabilitiesDiv.innerHTML = '';
+=======
+                    securityVulnerabilitiesDiv.innerHTML = ''; 
+
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
                     const staticIssues = data.analysis.static_issues || [];
                     const mlVulnerable = data.analysis.ml_vulnerable;
                     const mlProbability = data.analysis.ml_probability;
@@ -191,7 +261,7 @@ int main() {
                         });
                     }
                     if (staticIssues.length === 0 && mlVulnerable === false && !overallSafe) {
-                         securityVulnerabilitiesDiv.innerHTML += '<p class="text-gray-400 mt-2">No direct static rule violations detected.</p>';
+                        securityVulnerabilitiesDiv.innerHTML += '<p class="text-gray-400 mt-2">No direct static rule violations detected.</p>';
                     }
                     securityVulnerabilitiesDiv.innerHTML += `<h3 class="text-xl font-semibold mt-4 mb-2">Detailed Report:</h3>`;
                     reportMessages.forEach(msg => {
@@ -202,11 +272,32 @@ int main() {
                     securityVulnerabilitiesDiv.innerHTML = '<p class="text-gray-500 text-center py-4">No security analysis report available.</p>';
                 }
 
+                // Display Parse Tree Image
+                hideLoading(parseTreeLoading);
+                if (data.parse_tree && data.parse_tree.generated && data.parse_tree.image_path) {
+                    const imageUrl = `/static/${data.parse_tree.image_path}`; 
+                    parseTreeImage.src = imageUrl;
+                    // Force the image to display (override any previous display:none)
+                    parseTreeImage.style.display = 'block'; 
+                    parseTreeStatus.textContent = "Parse tree generated successfully. Click on image to view full size."; 
+                    // Add click listener for modal after the image source is set
+                    parseTreeImage.addEventListener('click', openParseTreeModal);
+                } else {
+                    parseTreeImage.style.display = 'none'; 
+                    const graphvizError = data.analysis.report_messages.some(msg => msg.includes("Graphviz is not installed"));
+                    if (graphvizError) {
+                        parseTreeStatus.textContent = "Parse tree visualization failed: Graphviz is not installed or not in server's PATH.";
+                    } else {
+                        parseTreeStatus.textContent = "Parse tree could not be generated (possible parsing errors or empty code).";
+                    }
+                }
+
 
                 // Handle Compilation/Execution Output (only if not analyzeOnly)
                 if (!analyzeOnly) {
                     currentSessionId = data.session_id; // Store session ID
 
+<<<<<<< HEAD
                     if (data.needs_input && data.session_id) { // Check if input is needed and session ID is provided
                         // Transform compiler-output div into a textarea for input
                         const originalCompilerOutputText = data.compilation_execution.compiler_output || 'Compilation successful.';
@@ -218,6 +309,13 @@ int main() {
                         compilerOutputContent = document.getElementById('compiler-output-input');
                         runWithInputButton.classList.remove('hidden'); // Show run button
                         programOutputDiv.textContent = 'Program awaiting input...'; // Indicate program status
+=======
+                    // Display Program Output (only if not analyzeOnly)
+                    if (data.compilation_execution && data.compilation_execution.program_output) {
+                        programOutputDiv.textContent = data.compilation_execution.program_output;
+                    } else if (data.compilation_execution && data.compilation_execution.error_message) {
+                        programOutputDiv.textContent = `Program did not produce output due to: ${data.compilation_execution.error_message}`;
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
                     } else {
                         // Display compiler output normally in the div
                         compilerOutputContainer.innerHTML = `<div id="compiler-output" class="whitespace-pre-wrap flex-grow"></div>`;
@@ -238,7 +336,11 @@ int main() {
                         }
                     }
                 } else {
+<<<<<<< HEAD
                     compilerOutputContent.textContent = 'Compilation not performed in Analyze mode.';
+=======
+                    compilerOutputDiv.textContent = 'Compilation not performed in Analyze mode.';
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
                     programOutputDiv.textContent = 'Program not executed in Analyze mode.';
                 }
 
@@ -258,11 +360,18 @@ int main() {
         } finally {
             hideLoading(compilerLoading);
             hideLoading(programLoading);
+<<<<<<< HEAD
             if (!currentSessionId) { // Only re-enable if not waiting for input
                 compileButton.disabled = false;
                 analyzeButton.disabled = false;
                 clearButton.disabled = false;
             }
+=======
+            hideLoading(parseTreeLoading);
+            compileButton.disabled = false;
+            analyzeButton.disabled = false;
+            clearButton.disabled = false;
+>>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
         }
     };
 
