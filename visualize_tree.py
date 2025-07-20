@@ -1,3 +1,4 @@
+
 import time
 # visualize_tree.py
 from graphviz import Digraph
@@ -11,6 +12,10 @@ def create_parse_tree_graph(root_node, filename='parse_tree'):
         root_node (ParseTreeNode): The root of the parse tree.
         filename (str): The base name for the output file (e.g., 'parse_tree.png').
     """
+    if not root_node:
+        print("DEBUG: No root node provided for parse tree visualization.")
+        return
+
     dot = Digraph(comment='Parse Tree', graph_attr={'rankdir': 'TB', 'splines': 'true'}) # TB: Top to Bottom
 
     node_count = 0

@@ -1,38 +1,45 @@
 # parser_custom.py
-from lexer import tokenize_code # Assuming Lexer is in lexer.py
-from parse_tree_node import ParseTreeNode # NEW: Import ParseTreeNode
+import logging # Import logging
+from lexer import tokenize_code 
+from parse_tree_node import ParseTreeNode 
+
+# Set up logging for parser_custom.py
+parser_logger = logging.getLogger(__name__ + '.Parser')
+parser_logger.setLevel(logging.INFO) # Set to INFO for production, DEBUG for more verbose output
 
 class Parser:
+    # Define insecure functions and their info as class-level attributes
+    insecure_functions = [
+        "gets", "strcpy", "strcat", "scanf", "sprintf", "system",
+        "eval", "popen", "vsprintf", "printf", "malloc", "realloc", "calloc"
+    ]
+    insecure_function_info = {
+        "gets": ("use fgets()", "CWE-120"),
+        "strcpy": ("use strncpy() with size limit", "CWE-120"),
+        "strcat": ("use strncat() with size limit", "CWE-120"),
+        "scanf": ("specify field width", "CWE-120"),
+        "sprintf": ("use snprintf()", "CWE-120"),
+        "system": ("avoid executing external commands", "CWE-78"),
+        "eval": ("avoid code injection", "CWE-94"),
+        "popen": ("avoid executing external commands", "CWE-78"),
+        "vsprintf": ("use vsnprintf()", "CWE-120"),
+        "printf": ("format string literal", "CWE-134"), # Note: this will flag all printf
+        "malloc": ("check return value for NULL", "CWE-399"), # Not directly insecure, but common source of error
+        "realloc": ("check return value for NULL", "CWE-399"),
+        "calloc": ("check return value for NULL", "CWE-399")
+    }
+
     def __init__(self, tokens):
         self.tokens = tokens
         self.current_token_index = 0
         self.current_token = None
-        self.warnings = [] # Collect warnings/errors here
+        self.warnings = [] # Collect general parser warnings/errors here
+        self.insecure_function_issues = [] # Collect structured insecure function findings
         self.advance() # Initialize current_token
 
-        self.parse_tree_root = None # NEW: To store the root of the parse tree
-
-        # List of functions considered insecure
-        self.insecure_functions = [
-            "gets", "strcpy", "strcat", "scanf", "sprintf", "system",
-            "eval", "popen", "vsprintf", "printf", "malloc", "realloc", "calloc" # Added realloc, calloc
-        ]
-        # Map insecure functions to their CWE and suggested fix
-        self.insecure_function_info = {
-            "gets": ("use fgets()", "CWE-120"),
-            "strcpy": ("use strncpy() with size limit", "CWE-120"),
-            "strcat": ("use strncat() with size limit", "CWE-120"),
-            "scanf": ("specify field width", "CWE-120"),
-            "sprintf": ("use snprintf()", "CWE-120"),
-            "system": ("avoid executing external commands", "CWE-78"),
-            "eval": ("avoid code injection", "CWE-94"),
-            "popen": ("avoid executing external commands", "CWE-78"),
-            "vsprintf": ("use vsnprintf()", "CWE-120"),
-            "printf": ("format string literal", "CWE-134"), # Note: this will flag all printf
-            "malloc": ("check return value for NULL", "CWE-399"), # Not directly insecure, but common source of error
-            "realloc": ("check return value for NULL", "CWE-399"),
-            "calloc": ("check return value for NULL", "CWE-399")
-        }
+        self.parse_tree_root = None 
+        
+        parser_logger.info(f"Parser initialized. Insecure function issues list length: {len(self.insecure_function_issues)}")
 
 
     def advance(self):
@@ -104,13 +111,16 @@ class Parser:
                 if func_def_pt:
                     program_pt_node.add_child(func_def_pt)
             else:
-                self.warn(f"❌ Error: Invalid top-level construct", self.current_token[2])
-                self.warn(f"⚠️ Skipping unrecognized token: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2])
+                self.warn(f"❌ Error: Invalid top-level construct", self.current_token[2] if self.current_token else "EOF")
+                self.warn(f"⚠️ Skipping unrecognized token: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2] if self.current_token else "EOF")
                 self.advance()
             self.skip_whitespace_and_comments()
 
         self.parse_tree_root = program_pt_node # Store the root
-        return self.warnings, self.parse_tree_root # NEW: Return the parse tree root
+        # DEBUG LOG: Show the insecure_function_issues list right before returning
+        parser_logger.info(f"DEBUG_PARSER: insecure_function_issues before return from parse(): {self.insecure_function_issues}")
+        # Return both general warnings and structured insecure function issues
+        return self.warnings, self.insecure_function_issues, self.parse_tree_root 
 
     def parse_function_definition(self):
         func_def_pt = ParseTreeNode('FunctionDefinition')
@@ -151,7 +161,7 @@ class Parser:
         if not lbrace_pt: return None
         func_def_pt.add_child(lbrace_pt)
 
-        print("✅ Function Declaration Found\n")
+        parser_logger.info("✅ Function Declaration Found")
         # Parse function body and add its parse tree to func_def_pt
         func_body_pt = self.parse_function_body()
         if func_body_pt:
@@ -174,7 +184,7 @@ class Parser:
                 # If parse_statement returned None, it means an error occurred or
                 # an unhandled token was encountered. We should try to recover.
                 if self.current_token and not (self.current_token[0] == "SEPARATOR" and self.current_token[1] == "}"):
-                    self.warn(f"⚠️ Skipping unparsable token in function body: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2])
+                    self.warn(f"⚠️ Skipping unparsable token in function body: {self.current_token[1]} (type: {self.current_token[0]})", self.current_token[2] if self.current_token else "EOF")
                     self.advance() # Advance to prevent infinite loop
         
         rbrace_pt = self.expect("SEPARATOR", "}")
@@ -183,12 +193,11 @@ class Parser:
             return None
         func_body_pt.add_child(rbrace_pt)
 
-        print("✅ Function Block Closed\n")
+        parser_logger.info("✅ Function Block Closed")
         return func_body_pt
 
     def parse_statement(self):
         statement_pt = ParseTreeNode('Statement')
-        original_token_index = self.current_token_index - 1 # Store starting position for recovery
         
         token_type, token_value, token_line = self.current_token if self.current_token else (None, None, None)
 
@@ -213,7 +222,7 @@ class Parser:
                         else: break # EOF
                     rsquare_pt = self.expect("OPERATOR", "]")
                     if rsquare_pt: statement_pt.add_child(rsquare_pt)
-                    print("✅ Array Declaration\n")
+                    parser_logger.info("✅ Array Declaration")
             else:
                 self.warn(f"❌ Error: Expected identifier after type keyword", token_line)
                 return None # Failed to parse
@@ -221,7 +230,7 @@ class Parser:
             semicolon_pt = self.expect("SEPARATOR", ";", "Missing ';' in declaration")
             if semicolon_pt:
                 statement_pt.add_child(semicolon_pt)
-                print("✅ Variable Declaration\n")
+                parser_logger.info("✅ Variable Declaration")
                 return statement_pt
             return None # Failed to parse
 
@@ -241,7 +250,7 @@ class Parser:
             semicolon_pt = self.expect("SEPARATOR", ";", "Missing ';' after return statement")
             if semicolon_pt:
                 statement_pt.add_child(semicolon_pt)
-                print("✅ Return Statement\n")
+                parser_logger.info("✅ Return Statement")
                 return statement_pt
             return None # Failed to parse
 
@@ -340,7 +349,7 @@ class Parser:
 
         # This part handles things like function calls or assignments
         # Check for explicitly insecure functions (this needs to be robust)
-        if token_type == "IDENTIFIER" and token_value in self.insecure_functions:
+        if token_type == "IDENTIFIER" and token_value in Parser.insecure_functions: # Access as class attribute
             self.check_insecure_function(token_value, current_line)
             
         # Parse the initial part of the expression (identifier, number, etc.)
@@ -356,19 +365,36 @@ class Parser:
         semicolon_pt = self.match("SEPARATOR", ";")
         if semicolon_pt:
             expr_stmt_pt.add_child(semicolon_pt)
-            # print("✅ Expression Statement\n") # Commented out to avoid double print with Function Call
+            # parser_logger.info("✅ Expression Statement") # Removed to avoid excessive logging
             return expr_stmt_pt
         else:
             self.warn("❌ Error: Missing ';' in statement", current_line)
             return None # Indicate parse failure
 
     def check_insecure_function(self, func_name, line_num):
-        info = self.insecure_function_info.get(func_name)
+        # Access insecure_function_info as a class attribute
+        info = Parser.insecure_function_info.get(func_name) 
         if info:
             fix_suggestion, cwe = info
-            self.warnings.append(f"❌ Use of insecure function {func_name}() detected. {line_num}: Suggested fix: {fix_suggestion}. [CWE-{cwe}]")
+            issue_data = {
+                "function": func_name,
+                "line": line_num,
+                "fix": fix_suggestion,
+                "cwe": cwe,
+                "source": "Custom Parser"
+            }
+            self.insecure_function_issues.append(issue_data)
+            parser_logger.info(f"DEBUG_PARSER: Added insecure function issue: {issue_data}. Current issues: {self.insecure_function_issues}")
         else:
-            self.warnings.append(f"❌ Detected use of '{func_name}' (marked as insecure). {line_num}")
+            issue_data = {
+                "function": func_name,
+                "line": line_num,
+                "fix": "Consult documentation for secure alternatives.",
+                "cwe": "N/A",
+                "source": "Custom Parser"
+            }
+            self.insecure_function_issues.append(issue_data)
+            parser_logger.info(f"DEBUG_PARSER: Added insecure function issue (no detailed info): {issue_data}. Current issues: {self.insecure_function_issues}")
 
 
 # --- Example Usage (for testing parser_custom.py independently) ---
@@ -389,11 +415,12 @@ if __name__ == "__main__":
             int x = 5;
             x = x + 1;
         }
+        printf("Vulnerable printf here.\\n"); // This should be flagged
         return 0;
     }
 
     void another_func(int a, char* b) {
-        printf("Vulnerable printf here.\\n"); // This should be flagged
+        printf("Another printf.\\n"); // This should be flagged
         int* ptr = malloc(10 * sizeof(int)); // Should be flagged
         if (ptr == NULL) { /* handle error */ }
         free(ptr); // Not flagged
@@ -404,14 +431,22 @@ if __name__ == "__main__":
     tokens = list(lexer.tokenize()) # Ensure tokens is a list
 
     parser = Parser(tokens)
-    warnings, parse_tree_root = parser.parse() # NEW: Get the parse_tree_root
+    # Get both general warnings and specific insecure function issues
+    warnings, insecure_func_issues, parse_tree_root = parser.parse() 
 
-    print("\n--- Parser Warnings/Errors ---")
+    print("\n--- Parser General Warnings/Errors ---")
     if warnings:
         for w in warnings:
             print(w)
     else:
-        print("No parser-specific warnings or errors detected (apart from expected insecure function warnings).")
+        print("No general parser warnings or errors detected.")
+
+    print("\n--- Insecure Function Findings (Custom Parser) ---")
+    if insecure_func_issues:
+        for issue in insecure_func_issues:
+            print(f"Function: {issue['function']}(), Line: {issue['line']}, Fix: {issue['fix']}, CWE: {issue['cwe']}")
+    else:
+        print("No insecure functions detected by custom parser.")
 
     print("\n--- Generated Parse Tree ---")
     if parse_tree_root:

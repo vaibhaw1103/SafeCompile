@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
+__pycache__
 
 # Virtual Environments
 venv/
@@ -25,3 +26,8 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Generated files and folders
+static/parse_trees/
+temp_code_files/
+compiled_binaries/

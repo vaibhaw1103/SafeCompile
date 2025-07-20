@@ -1,330 +1,156 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark"> <!-- Start with dark theme -->
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SafeCompile: AI-Powered Secure Code Compiler</title>
-    <!-- Tailwind CSS CDN -->
+    <title>SafeCompile: AI-Powered Secure C Compiler</title>
+    
+    <!-- Tailwind CSS & Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- xterm.js CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
+
+    <!-- Socket.IO Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+
+    <!-- Monaco Editor CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.40.0/min/vs/loader.js"></script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #000; /* Deep Navy-Black */
+            color: #e2e8f0; /* Light Gray Text */
         }
         .code-font {
             font-family: 'Fira Code', monospace;
         }
-        /* Custom scrollbar for dark theme textareas */
-        textarea::-webkit-scrollbar {
-            width: 8px;
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1c2128; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        .myLineHighlight {
+            background: rgba(6, 182, 212, 0.1); /* Cyan glow background */
+            border-left: 3px solid #06b6d4; /* Cyan border */
         }
-        textarea::-webkit-scrollbar-track {
-            background: #2D3748; /* bg-gray-800 */
-            border-radius: 10px;
+        .panel {
+            background-color: #080909;
+            border: 1px solid #30363d;
         }
-        textarea::-webkit-scrollbar-thumb {
-            background: #4A5568; /* bg-gray-700 */
-            border-radius: 10px;
+        #vertical-resizer {
+            background-color: #30363d;
+            cursor: ns-resize; /* North-South resize cursor */
+            flex-shrink: 0;
         }
-        textarea::-webkit-scrollbar-thumb:hover {
-            background: #687080; /* darker gray */
+        #vertical-resizer:hover {
+            background-color: #06b6d4; /* Highlight on hover */
         }
-        /* Styles for line numbers */
-        .line-numbers-container {
-<<<<<<< HEAD
-            display: flex;
-            height: 500px; /* Match textarea height */
-            overflow: hidden; /* Hide scrollbar for line numbers */
-            position: relative;
+        /* Transition for terminal panel */
+        #terminal-panel {
+            transition: all 0.3s ease-in-out;
         }
-        .line-numbers {
-            background-color: #1a202c; /* Darker background for numbers */
-            color: #6B7280; /* Text color for numbers */
-            padding: 24px 10px 24px 10px; /* Match textarea padding-left and top/bottom */
-            text-align: right;
-            user-select: none; /* Prevent selection of line numbers */
-            flex-shrink: 0; /* Don't let it shrink */
-            font-size: 1.125rem; /* Match textarea text-lg */
-            line-height: 1.75rem; /* Match textarea line-height */
-            overflow-y: hidden; /* Hide vertical scrollbar */
+        /* Custom Button Styles */
+        .btn-glow {
+            background-color: #000;
+            color: #67e8f9; /* Tailwind cyan-300 */
+            border: 1px solid #0e7490; /* Tailwind cyan-700 */
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
         }
-        .line-numbers span {
-            display: block;
+        .btn-glow:hover {
+            color: #a5f3fc; /* Tailwind cyan-200 */
+            border-color: #06b6d4; /* Tailwind cyan-500 */
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.7);
         }
-        .code-textarea {
-            padding-left: 10px !important; /* Adjust textarea padding to align with numbers */
-            border-top-left-radius: 0;
-            border-bottom-left-radius: 0;
+        .btn-glow-primary {
+            background-color: #000;
+            color: #22d3ee; /* Tailwind cyan-400 */
+            border: 1px solid #06b6d4; /* Tailwind cyan-500 */
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
         }
-        /* Style for the dynamically created input textarea */
-        .compiler-input-textarea {
-            width: 100%;
-            height: 100%;
-            padding: 4px; /* Adjust padding for input mode */
-            background-color: #1a202c; /* Darker background for input */
-            color: #e2e8f0;
-            font-size: 1rem; /* Slightly smaller font for input */
-            font-family: 'Fira Code', monospace;
-            border: 1px solid #4A5568; /* Add a subtle border */
-            border-radius: 0.375rem; /* match tailwind rounded-md */
-            resize: none; /* Disable manual resize */
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        .btn-glow-primary:hover {
+            color: #67e8f9; /* Tailwind cyan-300 */
+            border-color: #22d3ee; /* Tailwind cyan-400 */
+            box-shadow: 0 0 25px rgba(34, 211, 238, 0.9);
         }
     </style>
-=======
-        display: flex;
-        height: 500px; /* Match textarea height */
-        overflow: hidden; /* Hide scrollbar for line numbers */
-        position: relative;
-    }
-    .line-numbers {
-        background-color: #1a202c; /* Darker background for numbers */
-        color: #6B7280; /* Text color for numbers */
-        padding: 24px 10px 24px 10px; /* Match textarea padding-left and top/bottom */
-        text-align: right;
-        user-select: none; /* Prevent selection of line numbers */
-        flex-shrink: 0; /* Don't let it shrink */
-        font-size: 1.125rem; /* Match textarea text-lg */
-        line-height: 1.75rem; /* Match textarea line-height */
-        overflow-y: hidden; /* Hide vertical scrollbar */
-    }
-    .line-numbers span {
-        display: block;
-    }
-    .code-textarea {
-        padding-left: 10px !important; /* Adjust textarea padding to align with numbers */
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-    }
-
-    /* Modal Styles */
-    .modal {
-        display: none; /* Hidden by default */
-        position: fixed; /* Stay in place */
-        z-index: 1000; /* Sit on top */
-        left: 0;
-        top: 0;
-        width: 100%; /* Full width */
-        height: 100%; /* Full height */
-        overflow: auto; /* Enable scroll if needed */
-        background-color: rgba(0,0,0,0.9); /* Black w/ opacity */
-        justify-content: center;
-        align-items: center;
-    }
-    .modal-content {
-        margin: auto;
-        display: block;
-        max-width: 90%;
-        max-height: 90%;
-        object-fit: contain;
-        border-radius: 8px;
-    }
-    .close-button {
-        position: absolute;
-        top: 15px;
-        right: 35px;
-        color: #f1f1f1;
-        font-size: 40px;
-        font-weight: bold;
-        transition: 0.3s;
-        cursor: pointer;
-    }
-    .close-button:hover,
-    .close-button:focus {
-        color: #bbb;
-        text-decoration: none;
-        cursor: pointer;
-    }
-</style>
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
 </head>
-<body class="bg-gray-900 text-gray-200 min-h-screen p-8">
-    <div class="max-w-7xl mx-auto">
+<body class="flex h-screen overflow-hidden">
+    
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col">
         <!-- Header -->
-        <header class="mb-8">
-            <h1 class="text-5xl font-extrabold text-blue-400">SafeCompile</h1>
-            <p class="text-xl text-gray-400 mt-1">AI-Powered Secure Code Compiler</p>
-        </header>
+      <header class="flex items-center justify-between h-16 px-6 border-b border-gray-800 flex-shrink-0">
+    <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+        <h1 class="text-xl font-semibold text-white">SafeCompile</h1>
+    </div>
+    <div class="flex items-center gap-4">
+        <button id="run-button" class="px-4 py-2 font-medium rounded-md text-sm btn-glow">Run</button>
+        <button id="analyze-button" class="px-4 py-2 font-medium rounded-md text-sm btn-glow-primary">Analyze</button>
+        <button id="parsetree-button" class="px-4 py-2 font-medium rounded-md text-sm btn-glow">Parse Tree</button>
+        <button id="clear-button" class="px-4 py-2 font-medium rounded-md text-sm btn-glow">Clear</button>
+    </div>
+</header>
 
-<<<<<<< HEAD
-        <!-- Main Layout: Input + Vulnerabilities -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <!-- Code Input Area -->
-            <div class="md:col-span-2">
-                <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
-                    <!-- Buttons Bar -->
-                    <div class="flex p-3 border-b border-gray-700">
-                        <button id="compile-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Compile</button>
-                        <button id="analyze-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Analyze</button>
-                        <button id="clear-button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-md text-lg transition-colors">Clear</button>
-                    </div>
-                    <div class="line-numbers-container bg-gray-900">
-                        <div id="line-numbers" class="line-numbers code-font"></div>
-                        <textarea id="code-input" rows="20" class="code-textarea w-full h-[500px] p-6 bg-gray-900 text-gray-200 text-lg code-font focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="// Write your C code here...">
-=======
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div class="md:col-span-2">
-            <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
-                <div class="flex p-3 border-b border-gray-700">
-                    <button id="compile-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Compile</button>
-                    <button id="analyze-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-md text-lg mr-2 transition-colors">Analyze</button>
-                    <button id="clear-button" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-md text-lg transition-colors">Clear</button>
+        <!-- Workspace (Editor, Reports, Terminal) -->
+        <main class="flex-1 flex flex-col lg:flex-row p-4 gap-4 overflow-hidden">
+            <!-- Left Side (Editor & Terminal) -->
+            <div id="left-column" class="flex-1 flex flex-col gap-4 overflow-hidden">
+                <!-- Editor Panel -->
+                <div id="editor-panel" class="panel flex-1 flex flex-col rounded-lg overflow-hidden border border-cyan-700/50 shadow-[0_0_15px_rgba(14,165,233,0.3)]">
+                    <div class="px-4 py-2 border-b border-gray-800 text-sm text-gray-400">main.c</div>
+                    <div id="code-editor-container" class="flex-1 min-h-0"></div>
                 </div>
-                <div class="line-numbers-container bg-gray-900">
-                    <div id="line-numbers" class="line-numbers code-font"></div>
-                    <textarea id="code-input" rows="20" class="code-textarea w-full h-[500px] p-6 bg-gray-900 text-gray-200 text-lg code-font focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y" placeholder="// Write your C code here...">
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
-#include <stdio.h>
-#include <string.h> // For vulnerable strcpy
+                
+                <!-- Vertical Resizer (Desktop Only) -->
+                <div id="vertical-resizer" class="h-2 hover:bg-cyan-600 transition-colors hidden lg:block"></div>
 
-int main() {
-    char buffer[10];
-    char input[] = "This is a very long string that will overflow the buffer.";
-
-    printf("Hello from SafeCompile!\\n");
-
-    // Vulnerable code: buffer overflow using strcpy
-    // This should be flagged by analysis
-    strcpy(buffer, input);
-
-    printf("Buffer content: %s\\n", buffer);
-
-    // Example with user input:
-    // int num;
-    // printf("Enter a number: ");
-    // scanf("%d", &num); // This will trigger needs_input
-    // printf("You entered: %d\\n", num);
-
-    return 0;
-}
-</textarea>
+                <!-- Terminal Panel -->
+                <div id="terminal-panel" class="panel h-1/3 flex flex-col rounded-lg overflow-hidden min-h-[150px] lg:flex-initial hidden">
+                    <h2 class="px-4 py-2 border-b border-gray-800 font-semibold text-white">Terminal</h2>
+                    <div id="terminal-content-wrapper" class="relative flex-1 p-2 min-h-0">
+                        <div id="terminal" class="w-full h-full"></div>
+                        <div id="terminal-loading" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10 hidden">
+                            <svg class="animate-spin h-8 w-8 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </div>
                     </div>
                 </div>
             </div>
 
-<<<<<<< HEAD
-            <!-- Security Vulnerabilities / Analysis Report -->
-            <div>
-                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
-                <div id="security-vulnerabilities" class="bg-gray-800 rounded-lg shadow-xl p-6 h-[500px] overflow-y-auto">
-                    <!-- Vulnerability cards will be injected here by JS -->
-                    <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see vulnerabilities...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Output Areas -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Compiled Output -->
-            <div>
-                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Compiled Output</h2>
-                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative flex flex-col">
-                    <div id="compiler-output-container" class="flex-grow">
-                        <!-- Content will be injected here (div or textarea) -->
-                        <div id="compiler-output" class="whitespace-pre-wrap flex-grow"></div>
-                    </div>
-                    <!-- Moved run-with-input-button outside compiler-output-container -->
-                    <button id="run-with-input-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md mt-2 hidden transition-colors self-end text-sm">Run Program</button>
-                    <div id="compiler-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
-                        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+            <!-- Right Side (Reports) -->
+            <div class="w-full lg:w-1/3 flex flex-col gap-4 overflow-hidden mt-4 lg:mt-0">
+                <!-- Security Report Panel -->
+                <div id="security-panel" class="panel h-full flex flex-col rounded-lg overflow-hidden border border-cyan-700/50 shadow-[0_0_15px_rgba(14,165,233,0.3)]">
+                    <h2 id="report-title" class="px-4 py-2 border-b border-gray-800 font-semibold text-cyan-300">Security Report</h2>
+                    <div id="report-content" class="p-4 overflow-y-auto code-font text-sm flex-1">
+                        <!-- Content will be dynamically inserted here -->
+                        <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see results...</p>
                     </div>
                 </div>
             </div>
-
-            <!-- Program Output -->
-            <div>
-                <h2 class="text-2xl font-semibold text-gray-100 mb-3">Program Output</h2>
-                <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
-                    <div id="program-output" class="whitespace-pre-wrap"></div>
-                    <div id="program-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
-                        <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Error Message Area -->
-        <div id="error-message-section" class="bg-red-800 p-4 rounded-lg shadow-xl mt-6 hidden">
-            <h2 class="text-2xl font-semibold text-red-300 mb-3">Error</h2>
-            <div id="error-message" class="text-red-200 code-font"></div>
-        </div>
-
-=======
-           <div>
-            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Security Vulnerabilities</h2>
-            <div id="security-vulnerabilities" class="bg-gray-800 rounded-lg shadow-xl p-6 h-[500px] overflow-y-auto">
-                <p id="analysis-placeholder" class="text-gray-500 text-center py-4">Run analysis to see vulnerabilities...</p>
-            </div>
-        </div>
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
+        </main>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Compiled Output</h2>
-            <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
-                <div id="compiler-output" class="whitespace-pre-wrap"></div>
-                <div id="compiler-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
-                    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <div>
-            <h2 class="text-2xl font-semibold text-gray-100 mb-3">Program Output</h2>
-            <div class="bg-gray-800 rounded-lg shadow-xl h-[300px] overflow-y-auto p-4 text-gray-300 code-font relative">
-                <div id="program-output" class="whitespace-pre-wrap"></div>
-                <div id="program-loading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
-                    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                </div>
-            </div>
+    <!-- Hidden elements (Error message, Modal) -->
+    <div id="error-message-section" class="fixed bottom-4 right-4 bg-red-800 text-red-200 p-3 rounded-md hidden">
+        <p id="error-message" class="code-font text-sm"></p>
+    </div>
+    <div id="parseTreeModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
+        <div class="relative bg-gray-900 p-4 rounded-lg shadow-lg max-w-4xl max-h-[90vh] overflow-auto">
+            <button id="closeModalButton" class="absolute top-2 right-2 text-gray-400 hover:text-white text-3xl font-bold focus:outline-none">&times;</button>
+            <img id="modalParseTreeImage" src="" alt="Full size Parse Tree" class="max-w-full max-h-full object-contain mx-auto rounded-md">
         </div>
     </div>
 
-    <!-- Parse Tree Visualization Section -->
-    <div class="mt-6">
-        <h2 class="text-2xl font-semibold text-gray-100 mb-3">Parse Tree Visualization</h2>
-        <div id="parseTreeContainer" class="bg-gray-800 rounded-lg shadow-xl p-6 text-center relative overflow-hidden">
-            <img id="parseTreeImage" src="" alt="Generated Parse Tree" 
-                 class="max-w-full h-auto mx-auto rounded-md border border-gray-700 cursor-pointer" 
-                 style="display: none; object-fit: contain; max-height: 600px; min-height: 100px;"> <!-- Added min-height -->
-            <p id="parseTreeStatus" class="text-gray-500 text-center py-4">Run analysis to generate parse tree...</p>
-            <div id="parseTreeLoading" class="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75 z-10 hidden">
-                <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-            </div>
-        </div>
-    </div>
-
-    <div id="error-message-section" class="bg-red-800 p-4 rounded-lg shadow-xl mt-6 hidden">
-        <h2 class="text-2xl font-semibold text-red-300 mb-3">Error</h2>
-        <div id="error-message" class="text-red-200 code-font"></div>
-    </div>
-
-</div>
-
-<!-- The Modal -->
-<div id="parseTreeModal" class="modal">
-    <span class="close-button">&times;</span>
-    <img class="modal-content" id="modalParseTreeImage">
-</div>
-
-<script src="/static/script.js"></script>
-
+    <script src="/static/script.js"></script>
 </body>
 </html>

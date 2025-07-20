@@ -1,39 +1,26 @@
 # parse_tree_node.py
 
 class ParseTreeNode:
-    def __init__(self, name, children=None, value=None, is_terminal=False):
-        """
-        Initializes a Parse Tree Node.
-
-        Args:
-            name (str): The name of the grammar rule (non-terminal) or the token type (terminal).
-            children (list, optional): A list of child ParseTreeNode objects. Defaults to None.
-            value (any, optional): The actual value of the token for terminal nodes (e.g., 'main', '123'). Defaults to None.
-            is_terminal (bool): True if this node represents a terminal symbol (a token).
-        """
-        self.name = name
-        self.children = children if children is not None else []
-        self.value = value
-        self.is_terminal = is_terminal
+    """
+    Represents a node in a simplified Abstract Syntax Tree (AST).
+    Used for visualization.
+    """
+    def __init__(self, name: str, value: str = None, is_terminal: bool = False):
+        self.name = name          # The type or role of the node (e.g., 'FunctionDecl', 'IntegerLiteral')
+        self.value = value        # The actual value if it's a terminal node (e.g., '10', 'main')
+        self.is_terminal = is_terminal # True if this node is a leaf in the simplified tree
+        self.children = []        # List of child ParseTreeNode objects
 
     def add_child(self, child_node):
-        """Adds a child node to this node's children list."""
-        if not isinstance(child_node, ParseTreeNode):
-            raise TypeError("Child must be a ParseTreeNode instance.")
-        self.children.append(child_node)
+        """Adds a child node to this node."""
+        if isinstance(child_node, ParseTreeNode):
+            self.children.append(child_node)
+        else:
+            raise TypeError("Child must be an instance of ParseTreeNode")
 
     def __repr__(self):
-        """String representation for debugging."""
-        if self.is_terminal:
-            # For terminals, show type and value
-            return f"<{self.name}: '{self.value}'>" if self.value is not None else f"<{self.name}>"
-        else:
-            # For non-terminals, just show the rule name
-            return f"<{self.name}>"
+        return f"ParseTreeNode(name='{self.name}', value='{self.value}', terminal={self.is_terminal}, children={len(self.children)})"
 
-    def print_tree(self, indent=0):
-        """Recursively prints the parse tree structure."""
-        prefix = "  " * indent
-        print(f"{prefix}{self.__repr__()}")
-        for child in self.children:
-            child.print_tree(indent + 1)
+    def __str__(self):
+        return self.name + (f" ({self.value})" if self.value else "")
+

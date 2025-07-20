@@ -1,337 +1,248 @@
 # app.py
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask_socketio import SocketIO, emit
 import subprocess
 import os
 import uuid
-<<<<<<< HEAD
 import sys
 import time
 import logging
-=======
-from flask import Flask, request, render_template, jsonify, send_from_directory # NEW: import send_from_directory
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
+import threading
+import queue
+import shutil
+import signal
+import platform 
 
-from analyze import analyze_code
+# Import your custom modules
+from analyze import analyze_code 
+from main import compile_and_run_c_code_in_docker, _cleanup_files_main 
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+socketio = SocketIO(app, cors_allowed_origins="*", 
+                    async_mode='threading', 
+                    logger=True, 
+                    engineio_logger=True,
+                    max_http_buffer_size=100 * 1024 * 1024, 
+                    ping_timeout=60, 
+                    ping_interval=25) 
 
-# Configure logging
-app.logger.setLevel(logging.INFO)
+# --- Logging Configuration ---
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO) 
+if root_logger.hasHandlers():
+    root_logger.handlers.clear()
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+root_logger.addHandler(handler)
+app.logger.setLevel(logging.INFO) 
 
+# --- Directory Setup ---
 TEMP_CODE_DIR = 'temp_code_files'
-if not os.path.exists(TEMP_CODE_DIR):
-    os.makedirs(TEMP_CODE_DIR)
+COMPILED_BINARIES_DIR = 'compiled_binaries'
+PARSE_TREE_IMAGE_DIR = os.path.join('static', 'parse_trees')
+for d in [TEMP_CODE_DIR, COMPILED_BINARIES_DIR, PARSE_TREE_IMAGE_DIR]:
+    if not os.path.exists(d):
+        os.makedirs(d)
 
-# This will store paths to compiled executables that need input for a later run.
-# Key: session_id (UUID), Value: executable_filepath
-# NOTE: In a production system, this should be replaced with a more robust,
-# persistent, and secure storage mechanism (e.g., a database, temporary file storage with expiry,
-# or more advanced containerization) to manage multiple concurrent users and prevent memory leaks.
-# For this demonstration, a simple dictionary is used.
-compiled_executables = {}
-
-# Create directory for parse tree images if it doesn't exist
-PARSE_TREE_IMAGE_DIR = os.path.join('static', 'parse_trees') # Moved this here as it's an app-wide config
-if not os.path.exists(PARSE_TREE_IMAGE_DIR):
-    os.makedirs(PARSE_TREE_IMAGE_DIR)
-
+active_sessions = {} 
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-<<<<<<< HEAD
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory(app.static_folder, filename)
-=======
-# Route to serve the generated parse tree images
-@app.route('/static/parse_trees/<filename>') # Changed route to reflect static serving
-def serve_parse_tree_image(filename):
+
+# --- NEW: Background Task for Analysis and Compilation ---
+def analysis_and_run_task(sid, code, mode):
     """
-    Serves the generated parse tree images from the static/parse_trees directory.
+    This function runs in a background thread to avoid blocking the server.
+    It performs analysis, compilation, and execution, emitting results as they are ready.
     """
-    return send_from_directory(os.path.join(app.root_path, 'static', 'parse_trees'), filename) # Corrected path
-
-
-@app.route('/analyze_and_compile', methods=['POST'])
-def analyze_and_compile_endpoint():
-    """
-    API endpoint to receive C code, run analysis, compile, and execute.
-    Returns JSON response with all results.
-    """
-    code_string = request.json.get('code', '')
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
-
-# Helper function to clean up files safely
-def _cleanup_files(c_filepath, exe_filepath):
-    """Safely attempts to remove compiled executable and source file."""
-    if exe_filepath and os.path.exists(exe_filepath):
-        # Add a small delay to ensure OS releases file handle, especially on Windows
-        time.sleep(0.1)
-        try:
-            os.remove(exe_filepath)
-            app.logger.info(f"Cleaned up executable: {exe_filepath}")
-        except PermissionError:
-            app.logger.warning(f"Permission denied when trying to remove executable: {exe_filepath}. It might still be in use.")
-        except Exception as e:
-            app.logger.error(f"Error removing executable {exe_filepath}: {e}")
-
-    if c_filepath and os.path.exists(c_filepath):
-        try:
-            os.remove(c_filepath)
-            app.logger.info(f"Cleaned up C source file: {c_filepath}")
-        except Exception as e:
-            app.logger.error(f"Error removing C source file {c_filepath}: {e}")
-
-
-@app.route('/analyze_and_compile', methods=['POST'])
-def analyze_and_compile():
-    code = request.json.get('code', '')
-    if not code:
-        return jsonify({"error": "No code provided."}), 400
-
-    analysis_results = {}
-    compiler_output = ""
-    program_output = ""
-    execution_error = ""
-    needs_input = False # Flag to indicate if the program will require user input
-    session_id = str(uuid.uuid4()) # Unique ID for this compilation/execution session
-
-    c_filepath = None
-    exe_filepath = None
+    c_filepath = os.path.join(TEMP_CODE_DIR, f"temp_code_{uuid.uuid4()}.c")
+    exe_filepath_for_cleanup = None
 
     try:
-        # 1. Detect if code *might* need user input (simple heuristic)
-        # We look for common C input functions. This is a heuristic and not foolproof.
-        input_keywords = ['scanf', 'gets', 'fgets', 'getchar', 'read']
-        if any(keyword in code for keyword in input_keywords):
-            needs_input = True
-            app.logger.info(f"Input function detected in code (session: {session_id}). Setting needs_input = True.")
-
-        # 2. Perform security analysis
-        analysis_results = analyze_code(code)
-
-        # 3. Compile the C code
-        # Use session_id in filename to easily link executable to session
-        unique_c_filename = f"user_code_{session_id}.c"
-        c_filepath = os.path.join(TEMP_CODE_DIR, unique_c_filename)
-
-        with open(c_filepath, 'w') as f:
+        with open(c_filepath, 'w', encoding='utf-8') as f:
             f.write(code)
+        app.logger.info(f"Session {sid}: Code saved to {c_filepath}")
 
-        if sys.platform == "win32":
-            exe_filepath = c_filepath.replace('.c', '.exe')
-        else:
-            exe_filepath = c_filepath.replace('.c', '')
-
-        compile_command = ['gcc', c_filepath, '-o', exe_filepath]
-        compile_process = subprocess.run(compile_command, capture_output=True, text=True, timeout=10)
-        compiler_output = compile_process.stdout + compile_process.stderr
-
-        if compile_process.returncode == 0:
-            compiler_output += "\n✅ Program compiled successfully."
-            if needs_input:
-                # If input is needed, store executable for later run and inform frontend
-                compiled_executables[session_id] = exe_filepath
-                program_output = "Program requires input. Please enter values below and click 'Run Program'."
-                app.logger.info(f"Executable {exe_filepath} stored for session {session_id}")
-            else:
-                # If no input is needed, run immediately
-                app.logger.info(f"Executing program for session {session_id} (no input detected).")
-                # Increased timeout to 10 seconds for initial execution
-                execute_process = subprocess.run([exe_filepath], capture_output=True, text=True, timeout=10)
-                # Capture both stdout and stderr for program output
-                program_output = execute_process.stdout + execute_process.stderr
-                if execute_process.stderr:
-                    # If stderr exists, we still concatenate it to program_output, but also store it as execution_error
-                    # for clarity on the server side (though frontend will display it via program_output)
-                    execution_error = execute_process.stderr
-                # Clean up executable immediately if it was run fully
-                _cleanup_files(c_filepath, exe_filepath)
-                # Remove from compiled_executables if it was run immediately
-                if session_id in compiled_executables:
-                    del compiled_executables[session_id]
-        else:
-            execution_error = "Compilation failed. See compiler output for details."
-            # If compilation fails, ensure no dangling executable reference and cleanup
-            if session_id in compiled_executables:
-                del compiled_executables[session_id]
-            _cleanup_files(c_filepath, exe_filepath) # Attempt to cleanup even if compilation failed
-
-    except subprocess.TimeoutExpired as e:
-        execution_error = f"Compilation or initial program execution timed out: {e}."
-        _cleanup_files(c_filepath, exe_filepath)
-        if session_id in compiled_executables:
-            del compiled_executables[session_id]
-    except Exception as e:
-        execution_error = f"An unexpected error occurred during compilation or execution: {str(e)}"
-        _cleanup_files(c_filepath, exe_filepath)
-        if session_id in compiled_executables:
-            del compiled_executables[session_id]
-    finally:
-        # Only clean up C file here. Executable cleanup depends on needs_input flag and /execute_with_input route.
-        if c_filepath and os.path.exists(c_filepath):
-            try:
-                os.remove(c_filepath)
-            except Exception as e:
-                app.logger.error(f"Error removing C source file {c_filepath}: {e}")
-
-    compilation_execution_results = {
-        "compiler_output": compiler_output,
-        "program_output": program_output,
-        "error_message": execution_error if execution_error else None
-    }
-
-    response_data = {
-        "analysis": analysis_results,
-        "compilation_execution": compilation_execution_results,
-        "needs_input": needs_input,
-        "session_id": session_id if needs_input else None # Only send session ID if input is needed
-    }
-    return jsonify(response_data)
-
-
-@app.route('/execute_with_input', methods=['POST'])
-def execute_with_input():
-    """
-    New API endpoint to execute a previously compiled program with user-provided input.
-    """
-    session_id = request.json.get('session_id')
-    input_data = request.json.get('input', '')
-
-    program_output = ""
-    execution_error = ""
-    exe_filepath = None
-
-    if not session_id:
-        return jsonify({"error": "No session ID provided for execution."}), 400
-
-    # Retrieve the path to the executable using the session ID
-    exe_filepath = compiled_executables.get(session_id)
-
-    if not exe_filepath or not os.path.exists(exe_filepath):
-        # This can happen if the server restarted, or file was manually deleted, or ID is invalid
-        app.logger.warning(f"Executable for session {session_id} not found or session expired.")
-        return jsonify({"error": "Program not found or session expired. Please re-compile the code."}), 404
-
-    try:
-        app.logger.info(f"Executing {exe_filepath} with provided input for session {session_id}")
-        app.logger.info(f"Input received for session {session_id}: '{input_data}'") # Log the received input
-
-        # Ensure the input ends with a newline to simulate "Enter" press
-        if input_data and not input_data.endswith('\n'):
-            input_data += '\n'
-            app.logger.info(f"Appended newline to input: '{input_data}'") # Log the modified input
-
-        # Execute the program, passing input_data to stdin
-        # Increased timeout to 10 seconds for interactive execution
-        execute_process = subprocess.run(
-            [exe_filepath],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=10 # Max 10 seconds for execution
-        )
-        # Capture both stdout and stderr for program output
-        program_output = execute_process.stdout + execute_process.stderr
-        if execute_process.stderr:
-            execution_error = execute_process.stderr # Still keep this for server-side logging/distinction
-
-    except subprocess.TimeoutExpired:
-        execution_error = "Program execution timed out."
-    except Exception as e:
-        execution_error = f"An error occurred during program execution: {str(e)}"
-    finally:
-        # Always clean up the executable after it's run via this endpoint
-        _cleanup_files(None, exe_filepath) # C file was already cleaned up in analyze_and_compile
-        # Remove the session ID from the dictionary after it's used
-        if session_id in compiled_executables:
-            del compiled_executables[session_id]
-            app.logger.info(f"Removed session {session_id} from compiled_executables.")
-
-    return jsonify({
-        "program_output": program_output,
-        "error_message": execution_error
-    })
-
-
-@app.route('/analyze_code_only', methods=['POST'])
-def analyze_code_only():
-    code = request.json.get('code', '')
-    if not code:
-        return jsonify({"error": "No code provided for analysis."}), 400
-
-<<<<<<< HEAD
-    try:
-        analysis_results = analyze_code(code)
-        return jsonify({"analysis": analysis_results})
-=======
-    temp_filename = os.path.join(app.config['UPLOAD_FOLDER'], f"user_code_{uuid.uuid4()}.c")
-    
-    # Initialize results dictionaries (these will be populated or stay empty on error)
-    analysis_output = {} # This will directly hold the dict from analyze_code
-    compilation_execution_results = {}
-    
-    try:
-        with open(temp_filename, 'w') as f:
-            f.write(code_string)
-
-        # --- Step 1: Run Security Analysis (now includes parse tree generation) ---
-        # The analyze_code function already returns the dictionary in the format
-        # expected by the frontend under the 'analysis' key.
-        analysis_output = analyze_code(code_string)
+        # Step 1: Run Security Analysis and emit results
+        app.logger.info(f"Session {sid}: Starting code analysis...")
+        raw_analysis_results = analyze_code(code) 
+        app.logger.info(f"Session {sid}: Analysis complete.")
         
-        # --- Step 2: Run Compilation and Execution ---
-        compilation_execution_results = compile_and_run_c_code(temp_filename)
-
-        # Combine all results into a single JSON response
-        full_report = {
-            "analysis": analysis_output, # Directly use the output from analyze_code
-            "compilation_execution": compilation_execution_results,
-            # The parse_tree info is already INSIDE analysis_output.
-            # No need for a separate 'parse_tree' top-level key if 'analyze_code'
-            # already includes 'parse_tree_image' and 'parse_tree_generated'
-            # within its returned dictionary.
-            # If analyze_code returns 'parse_tree_image' and 'parse_tree_generated'
-            # at its top level, then the frontend should access data.analysis.parse_tree_image.
-            # Your script.js is already doing this: data.parse_tree.generated, data.parse_tree.image_path
-            # Let's adjust script.js to look under data.analysis.parse_tree_...
-            # OR make analyze_code return parse_tree details in a nested dictionary
-            # as previously discussed.
-
-            # Re-reading script.js:
-            # data.parse_tree && data.parse_tree.generated && data.parse_tree.image_path
-            # This implies script.js expects a top-level 'parse_tree' key.
-            # But analyze_code returns parse_tree_image and parse_tree_generated at its root.
-
-            # To fix this, let's adjust the structure of analysis_output in analyze.py
-            # to nest parse_tree information correctly, OR update app.py to construct it.
-
-            # Given analyze.py already has them at root level of its return dict,
-            # it's better to pass them from analyze_output to full_report['parse_tree']
-            # as script.js expects.
-
-            "parse_tree": { # Re-add this explicit nesting as script.js expects
-                "image_path": analysis_output.get("parse_tree_image"),
-                "generated": analysis_output.get("parse_tree_generated")
+        frontend_analysis_payload = {
+            "analysis": {
+                "gemini_findings": raw_analysis_results.get("gemini_findings", []),
+                "insecure_function_findings": raw_analysis_results.get("insecure_function_findings", []), 
+                "ml_vulnerable": raw_analysis_results.get("ml_vulnerable"),
+                "ml_probability": raw_analysis_results.get("ml_probability"),
+                "overall_safe": raw_analysis_results.get("overall_safe"),
+            },
+            "parse_tree": { 
+                "image_path": raw_analysis_results.get("parse_tree_image"),
+                "generated": raw_analysis_results.get("parse_tree_generated")
             }
         }
-        return jsonify(full_report)
+        socketio.emit('analysis_results', frontend_analysis_payload, room=sid)
 
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
+        # Step 2: Compile & Run (if not in analyze-only mode)
+        if mode == 'compile':
+            app.logger.info(f"Session {sid}: Starting Docker-based compilation...")
+            socketio.emit('terminal_output', {'output': '\x1b[33m[INFO]: Starting secure compilation...\x1b[0m\r\n'}, room=sid)
+
+            compilation_execution_info = compile_and_run_c_code_in_docker(c_filepath, COMPILED_BINARIES_DIR, sid)
+            
+            socketio.emit('compiler_output', {"output": compilation_execution_info.get("compiler_output", "")}, room=sid)
+
+            if compilation_execution_info["status"] == "success" and compilation_execution_info.get("docker_process") is not None: 
+                docker_process = compilation_execution_info["docker_process"]
+                exe_filepath_for_cleanup = compilation_execution_info.get("executable_path")
+
+                input_queue = queue.Queue()
+                active_sessions[sid] = {
+                    'process_obj': docker_process,
+                    'c_filepath': c_filepath, 
+                    'exe_filepath': exe_filepath_for_cleanup, 
+                    'input_queue': input_queue
+                }
+
+                # Start threads to handle I/O for the running process
+                start_io_threads(sid, docker_process, input_queue)
+                socketio.emit('program_started', {"message": f"Compilation started. Enter input if prompted."}, room=sid)
+            else:
+                error_msg = compilation_execution_info.get("error_message", "Compilation failed.")
+                socketio.emit('execution_complete', {'success': False, 'error': error_msg}, room=sid)
+                _cleanup_files_main(c_filepath, None)
+                
+        elif mode == 'analyze':
+            socketio.emit('execution_complete', {"success": True, "message": "Analysis complete."}, room=sid)
+            _cleanup_files_main(c_filepath, None)
+
     except Exception as e:
-        app.logger.error(f"Error during analysis: {e}")
-        return jsonify({"error": f"An internal server error occurred during analysis: {str(e)}"}), 500
+        app.logger.error(f"Session {sid}: Server error in background task: {e}", exc_info=True)
+        socketio.emit('execution_complete', {"success": False, "error": f"Server error: {str(e)}"}, room=sid)
+        _cleanup_files_main(c_filepath, exe_filepath_for_cleanup)
 
+# --- NEW: Main Socket.IO handler now starts the background task ---
+@socketio.on('compile_and_analyze')
+def handle_compile_and_analyze(data):
+    sid = request.sid
+    code = data.get('code', '')
+    mode = data.get('mode', 'compile') 
+    app.logger.info(f"Session {sid}: Received request in mode: {mode}. Starting background task.")
+    
+    if not code:
+        emit('execution_complete', {"success": False, "error": "No code provided."}, room=sid)
+        return
 
-# app.py
-# ... (rest of your code) ...
+    # Start the long-running process in the background
+    socketio.start_background_task(analysis_and_run_task, sid, code, mode)
+
+# --- I/O Threading Functions ---
+def start_io_threads(sid, process, input_queue):
+    # Thread to read stdout/stderr from Docker process
+    def read_pipe(pipe, s_sid, is_stderr=False):
+        try:
+            # --- FIXED: Read in small chunks to avoid blocking on readline ---
+            while True:
+                chunk = pipe.read(1024)
+                if not chunk:
+                    break
+                output = chunk.decode('utf-8', errors='ignore')
+                if is_stderr:
+                    output = f"\x1b[31m{output}\x1b[0m"
+                socketio.emit('terminal_output', {'output': output}, room=s_sid)
+        except Exception as e:
+            app.logger.error(f"Session {s_sid}: Error reading from pipe: {e}", exc_info=True)
+        finally:
+            pipe.close()
+            app.logger.info(f"Session {s_sid}: Pipe reader thread finished.")
+            socketio.start_background_task(wait_and_cleanup_wrapper, s_sid)
+
+    # Thread to write input to Docker process stdin
+    def write_pipe_input(pipe, q, s_sid):
+        while True:
+            try:
+                input_data = q.get() 
+                if input_data is None: break
+                pipe.write(input_data.encode('utf-8'))
+                pipe.flush()
+            except (ValueError, OSError):
+                app.logger.debug(f"Session {s_sid}: STDIN pipe closed.")
+                break
+        app.logger.info(f"Session {s_sid}: Input writer thread finished.")
+
+    stdout_reader = threading.Thread(target=read_pipe, args=(process.stdout, sid, False))
+    stderr_reader = threading.Thread(target=read_pipe, args=(process.stderr, sid, True))
+    input_writer = threading.Thread(target=write_pipe_input, args=(process.stdin, input_queue, sid))
+
+    for t in [stdout_reader, stderr_reader, input_writer]:
+        t.daemon = True
+        t.start()
+
+def wait_and_cleanup_wrapper(s_sid):
+    if s_sid not in active_sessions:
+        return
+
+    session_data = active_sessions.get(s_sid)
+    if not session_data:
+        return 
+
+    process_obj = session_data['process_obj']
+    input_q = session_data.get('input_queue') 
+
+    if input_q:
+        input_q.put(None) 
+
+    exit_code, success, error_message = None, False, None
+    
+    try:
+        exit_code = process_obj.wait(timeout=30)
+        success = (exit_code == 0)
+        if not success: error_message = f"Program exited with non-zero code: {exit_code}"
+    except subprocess.TimeoutExpired:
+        process_obj.terminate()
+        error_message = "Program execution timed out."
+    except Exception as e:
+        error_message = f"Error during program execution: {str(e)}"
+    finally:
+        socketio.emit('execution_complete', {"success": success, "error": error_message, "exit_code": exit_code}, room=s_sid) 
+        
+        if s_sid in active_sessions:
+            c_fp = active_sessions[s_sid].get('c_filepath')
+            exe_fp = active_sessions[s_sid].get('exe_filepath')
+            _cleanup_files_main(c_fp, exe_fp)
+            del active_sessions[s_sid] 
+        app.logger.info(f"Session {s_sid}: Execution and cleanup complete.")
+
+@socketio.on('terminal_input')
+def handle_terminal_input(data):
+    sid = request.sid
+    session_data = active_sessions.get(sid)
+    if session_data and session_data.get('input_queue'):
+        session_data['input_queue'].put(data.get('input', ''))
+    else:
+        socketio.emit('terminal_output', {'output': '\x1b[31m[INFO]: No active program to receive input.\x1b[0m\r\n'}, room=sid) 
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    app.logger.info(f"Client {sid} disconnected.")
+    if sid in active_sessions:
+        session_data = active_sessions[sid]
+        process_obj = session_data.get('process_obj')
+        if process_obj and process_obj.poll() is None:
+            process_obj.terminate()
+        
+        _cleanup_files_main(session_data.get('c_filepath'), session_data.get('exe_filepath'))
+        del active_sessions[sid]
+        app.logger.info(f"Session {sid}: Cleaned up session data on disconnect.")
 
 if __name__ == '__main__':
-<<<<<<< HEAD
-    app.run(debug=True)
-=======
-    # Run the Flask development server
-    app.run(debug=True, host='0.0.0.0', port=5000) # ADD host='0.0.0.0'
->>>>>>> 9355ef53ff6fb0c76cc6cdc4856c5930f564d6a2
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
