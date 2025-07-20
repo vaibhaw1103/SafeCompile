@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Virtual Environments
+venv/
+*.venv
+env/
+ENV/
+
+# Secrets and Environment Variables
+# NEVER commit your .env files
+.env
+.env.*
+
+# IDE and Editor Folders
+.vscode/
+.idea/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
